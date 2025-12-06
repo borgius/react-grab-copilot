@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Tool } from '../tool';
 import * as path from 'path';
+import { resolvePath } from '../util/pathResolver';
 
 export const editFileTool: Tool = {
     definition: {
@@ -23,8 +24,8 @@ export const editFileTool: Tool = {
     },
     execute: async (args: { filePath: string; newContent: string }) => {
         try {
-            const uri = vscode.Uri.file(args.filePath);
-            await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(args.filePath)));
+            const uri = await resolvePath(args.filePath);
+            await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
             
             const edit = new vscode.WorkspaceEdit();
             try {

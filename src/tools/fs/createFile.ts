@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Tool } from '../tool';
 import * as path from 'path';
+import { resolvePath } from '../util/pathResolver';
 
 export const createFileTool: Tool = {
     definition: {
@@ -23,8 +24,8 @@ export const createFileTool: Tool = {
     },
     execute: async (args: { filePath: string; content: string }) => {
         try {
-            const uri = vscode.Uri.file(args.filePath);
-            await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(args.filePath)));
+            const uri = await resolvePath(args.filePath);
+            await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
             await vscode.workspace.fs.writeFile(uri, Buffer.from(args.content));
             return `Successfully created file ${args.filePath}`;
         } catch (err: any) {

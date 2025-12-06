@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Tool } from '../tool';
+import { resolvePath } from '../util/pathResolver';
 
 export const getErrorsTool: Tool = {
     definition: {
@@ -20,7 +21,7 @@ export const getErrorsTool: Tool = {
             let diagnostics: [vscode.Uri, vscode.Diagnostic[]][];
             
             if (args.filePath) {
-                const uri = vscode.Uri.file(args.filePath);
+                const uri = await resolvePath(args.filePath);
                 diagnostics = [[uri, vscode.languages.getDiagnostics(uri)]];
             } else {
                 diagnostics = vscode.languages.getDiagnostics();

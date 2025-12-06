@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Tool } from '../tool';
+import { resolvePath } from '../util/pathResolver';
 
 export const readFileTool: Tool = {
     definition: {
@@ -18,7 +19,7 @@ export const readFileTool: Tool = {
     },
     execute: async (args: { filePath: string }) => {
         try {
-            const uri = vscode.Uri.file(args.filePath);
+            const uri = await resolvePath(args.filePath);
             const document = await vscode.workspace.openTextDocument(uri);
             return document.getText();
         } catch (err: any) {

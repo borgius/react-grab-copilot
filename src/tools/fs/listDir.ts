@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Tool } from '../tool';
 import * as fs from 'fs';
+import { resolvePath } from '../util/pathResolver';
 
 export const listDirTool: Tool = {
     definition: {
@@ -19,7 +20,8 @@ export const listDirTool: Tool = {
     },
     execute: async (args: { dirPath: string }) => {
         try {
-            const entries = await fs.promises.readdir(args.dirPath, { withFileTypes: true });
+            const uri = await resolvePath(args.dirPath);
+            const entries = await fs.promises.readdir(uri.fsPath, { withFileTypes: true });
             return entries.map(e => `${e.name} ${e.isDirectory() ? "(dir)" : "(file)"}`).join("\n");
         } catch (err: any) {
             return `Error listing directory: ${err.message}`;
