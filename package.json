@@ -67,7 +67,8 @@
     "compile": "tsc -p ./",
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "test": "vitest"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.8",

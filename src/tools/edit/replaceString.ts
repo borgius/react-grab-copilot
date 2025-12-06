@@ -31,18 +31,50 @@ export const replaceStringTool: Tool = {
             const document = await vscode.workspace.openTextDocument(uri);
             const text = document.getText();
             
-            const index = text.indexOf(args.oldString);
+            // Try exact match first
+            let index = text.indexOf(args.oldString);
+            let matchLength = args.oldString.length;
+
             if (index === -1) {
-                return `Error: oldString not found in ${args.filePath}`;
-            }
-            
-            // Check for multiple occurrences
-            if (text.indexOf(args.oldString, index + 1) !== -1) {
-                return `Error: oldString is not unique in ${args.filePath}. Please provide more context.`;
+                // Try fuzzy match (ignoring whitespace differences)
+                // Build a pattern that allows optional whitespace around punctuation
+                let pattern = '';
+                const punctuation = /[=:,;(){}\[\]+\-*\/><"']/;
+                
+                for (let i = 0; i < args.oldString.length; i++) {
+                    const char = args.oldString[i];
+                    if (/\s/.test(char)) {
+                        pattern += '\\s+';
+                    } else if (punctuation.test(char)) {
+                        pattern += `\\s*${char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`;
+                    } else {
+                        pattern += char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    }
+                }
+                
+                const regex = new RegExp(pattern, 'g');
+                
+                const matches = Array.from(text.matchAll(regex));
+                
+                if (matches.length === 0) {
+                    return `Error: oldString not found in ${args.filePath} (resolved: ${uri.fsPath})`;
+                }
+                
+                if (matches.length > 1) {
+                    return `Error: oldString is not unique in ${args.filePath} (fuzzy match). Please provide more context.`;
+                }
+                
+                index = matches[0].index!;
+                matchLength = matches[0][0].length;
+            } else {
+                // Check for multiple occurrences (exact match)
+                if (text.indexOf(args.oldString, index + 1) !== -1) {
+                    return `Error: oldString is not unique in ${args.filePath}. Please provide more context.`;
+                }
             }
 
             const startPos = document.positionAt(index);
-            const endPos = document.positionAt(index + args.oldString.length);
+            const endPos = document.positionAt(index + matchLength);
             const range = new vscode.Range(startPos, endPos);
             
             const edit = new vscode.WorkspaceEdit();

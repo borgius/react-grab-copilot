@@ -19,7 +19,7 @@ export const createDirectoryTool: Tool = {
     },
     execute: async (args: { dirPath: string }) => {
         try {
-            const uri = await resolvePath(args.dirPath);
+            const uri = await resolvePath(args.dirPath, false);
             await vscode.workspace.fs.createDirectory(uri);
             return `Successfully created directory ${args.dirPath}`;
         } catch (err: any) {

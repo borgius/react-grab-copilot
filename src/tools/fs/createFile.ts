@@ -24,7 +24,7 @@ export const createFileTool: Tool = {
     },
     execute: async (args: { filePath: string; content: string }) => {
         try {
-            const uri = await resolvePath(args.filePath);
+            const uri = await resolvePath(args.filePath, false);
             await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
             await vscode.workspace.fs.writeFile(uri, Buffer.from(args.content));
             return `Successfully created file ${args.filePath}`;

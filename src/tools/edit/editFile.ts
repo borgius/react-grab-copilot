@@ -24,7 +24,7 @@ export const editFileTool: Tool = {
     },
     execute: async (args: { filePath: string; newContent: string }) => {
         try {
-            const uri = await resolvePath(args.filePath);
+            const uri = await resolvePath(args.filePath, false);
             await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
             
             const edit = new vscode.WorkspaceEdit();

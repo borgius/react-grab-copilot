@@ -1,49 +1,48 @@
 import * as vscode from 'vscode';
 
-export async function resolvePath(filePath: string): Promise<vscode.Uri> {
+export async function resolvePath(filePath: string, checkExists: boolean = true): Promise<vscode.Uri> {
+    // If we have a workspace, try to resolve relative to it first
+    // This handles the case where users provide "/src/file.ts" meaning project root,
+    // even if a file technically exists at the system root.
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        const workspaceRoot = vscode.workspace.workspaceFolders[0].uri;
+        // Remove leading slash if present to join correctly
+        const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+        const resolvedUri = vscode.Uri.joinPath(workspaceRoot, relativePath);
+        
+        try {
+            await vscode.workspace.fs.stat(resolvedUri);
+            return resolvedUri;
+        } catch {
+            // Ignore and try absolute/original path
+        }
+    }
+
     let uri = vscode.Uri.file(filePath);
     
     // Try to resolve relative paths if absolute path doesn't exist
     try {
         await vscode.workspace.fs.stat(uri);
+        return uri;
     } catch {
         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
             const workspaceRoot = vscode.workspace.workspaceFolders[0].uri;
             // Remove leading slash if present to join correctly
             const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
             const resolvedUri = vscode.Uri.joinPath(workspaceRoot, relativePath);
-            try {
-                // Check if the resolved path exists or if we are creating a file (parent dir exists)
-                // For creation, we might want to be more lenient, but for now let's check existence for read operations
-                // The caller can handle the "not found" error if they intend to create it.
-                // However, for consistency, we return the resolved URI if the original one didn't exist.
-                // But wait, if we are creating a file, it won't exist yet.
-                // So we should probably return the resolved URI if it looks like a relative path was intended.
-                
-                // If the original path didn't exist, and we found a match relative to workspace, use that.
-                await vscode.workspace.fs.stat(resolvedUri);
-                uri = resolvedUri;
-            } catch {
+            
+            if (!checkExists) {
                 // If neither exists, and it looks like an absolute path that failed, 
-                // but we have a workspace, maybe we should default to the workspace-relative path 
-                // if we are in a "create" context? 
-                // But this function is generic.
-                
-                // Let's stick to the logic: if it exists relative to workspace, use it.
-                // If not, return the original URI (which will fail later, or be used for creation).
-                
-                // One edge case: creating a new file at "/src/new.ts". 
-                // Original URI: /src/new.ts (root of FS). Likely wrong.
-                // Workspace URI: /Users/user/project/src/new.ts. Likely right.
-                
-                // If the path starts with / and we are on a system where that could be root,
-                // but it's not found, and we are in a workspace...
-                
-                if (filePath.startsWith('/') && vscode.workspace.workspaceFolders) {
-                     uri = resolvedUri;
-                }
+                // but we have a workspace, default to the workspace-relative path 
+                // as that's most likely what the user intended for creation/editing.
+                return resolvedUri;
             }
         }
     }
+
+    if (checkExists) {
+        throw new Error(`File not found: ${filePath}`);
+    }
+
     return uri;
 }
