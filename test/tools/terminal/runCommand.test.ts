@@ -1,0 +1,35 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { runTerminalCommandTool } from '../../../src/tools/terminal/runCommand';
+import * as cp from 'child_process';
+
+vi.mock('child_process', () => ({
+    exec: vi.fn(),
+}));
+
+describe('runTerminalCommandTool', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should run command', async () => {
+        (cp.exec as any).mockImplementation((cmd, opts, cb) => {
+            cb(null, 'command output', '');
+        });
+
+        const result = await runTerminalCommandTool.execute({ command: 'echo hello' });
+
+        expect(cp.exec).toHaveBeenCalledWith('echo hello', expect.anything(), expect.anything());
+        expect(result).toBe('command output');
+    });
+
+    it('should handle errors', async () => {
+        (cp.exec as any).mockImplementation((cmd, opts, cb) => {
+            cb(new Error('Command failed'), '', 'stderr');
+        });
+
+        const result = await runTerminalCommandTool.execute({ command: 'fail' });
+
+        expect(result).toContain('Error: Command failed');
+        expect(result).toContain('Stderr: stderr');
+    });
+});

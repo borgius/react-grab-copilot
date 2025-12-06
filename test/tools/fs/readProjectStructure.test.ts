@@ -1,0 +1,53 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readProjectStructureTool } from '../../../src/tools/fs/readProjectStructure';
+import * as fs from 'fs';
+import * as vscode from 'vscode';
+
+vi.mock('fs', () => ({
+    promises: {
+        readdir: vi.fn(),
+    },
+}));
+
+describe('readProjectStructureTool', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should read project structure', async () => {
+        // Mock root directory
+        (fs.promises.readdir as any).mockImplementation(async (path: string) => {
+            if (path === '/mock/workspace') {
+                return [
+                    { name: 'src', isDirectory: () => true },
+                    { name: 'package.json', isDirectory: () => false },
+                ];
+            }
+            if (path.endsWith('src')) {
+                return [
+                    { name: 'index.ts', isDirectory: () => false },
+                ];
+            }
+            return [];
+        });
+
+        const result = await readProjectStructureTool.execute({});
+
+        expect(result).toContain('src/');
+        expect(result).toContain('package.json');
+        expect(result).toContain('index.ts');
+    });
+
+    it('should handle no workspace', async () => {
+        // Temporarily remove workspace folders
+        const originalFolders = vscode.workspace.workspaceFolders;
+        (vscode.workspace as any).workspaceFolders = undefined;
+
+        const result = await readProjectStructureTool.execute({});
+
+        expect(result).toBe('No workspace open');
+
+        // Restore
+        (vscode.workspace as any).workspaceFolders = originalFolders;
+    });
+});
