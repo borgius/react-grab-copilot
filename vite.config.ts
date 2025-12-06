@@ -1,19 +1,23 @@
-import { defineConfig } from 'vite';
-import { resolve } from 'path';
-import { builtinModules } from 'module';
+import { defineConfig } from "vite";
+import { resolve } from "path";
+import { builtinModules } from "module";
 
 export default defineConfig({
   build: {
-    target: 'node18',
+    target: "node18",
     lib: {
-      entry: resolve(__dirname, 'src/extension.ts'),
-      fileName: () => 'extension.js',
-      formats: ['cjs'],
+      entry: resolve(__dirname, "src/extension.ts"),
+      fileName: () => "extension.js",
+      formats: ["cjs"],
     },
     rollupOptions: {
-      external: ['vscode', ...builtinModules, ...builtinModules.map(m => `node:${m}`)],
+      external: [
+        "vscode",
+        ...builtinModules,
+        ...builtinModules.map((m) => `node:${m}`),
+      ],
     },
-    outDir: 'dist',
+    outDir: "dist",
     sourcemap: true,
     minify: false,
   },
