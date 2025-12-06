@@ -1,0 +1,45 @@
+{
+  "name": "react-grab-copilot",
+  "displayName": "React Grab Copilot",
+  "description": "VS Code extension to expose Copilot as an agent server",
+  "version": "0.0.1",
+  "publisher": "react-grab",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "React Grab Copilot",
+      "properties": {
+        "reactGrabCopilot.port": {
+          "type": "number",
+          "default": 6567,
+          "description": "Port to listen on for the agent server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14"
+  }
+}
