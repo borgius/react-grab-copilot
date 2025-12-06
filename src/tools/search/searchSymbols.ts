@@ -17,19 +17,15 @@ export const searchWorkspaceSymbolsTool: Tool = {
         },
     },
     execute: async (args: { query: string }) => {
-        try {
-            const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
-                'vscode.executeWorkspaceSymbolProvider',
-                args.query
-            );
+        const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+            'vscode.executeWorkspaceSymbolProvider',
+            args.query
+        );
 
-            if (!symbols || symbols.length === 0) {
-                return "No symbols found.";
-            }
-
-            return symbols.map(s => `${s.name} (${vscode.SymbolKind[s.kind]}) in ${vscode.workspace.asRelativePath(s.location.uri)}`).join('\n');
-        } catch (err: any) {
-            return `Error searching symbols: ${err.message}`;
+        if (!symbols || symbols.length === 0) {
+            return "No symbols found.";
         }
+
+        return symbols.map(s => `${s.name} (${vscode.SymbolKind[s.kind]}) in ${vscode.workspace.asRelativePath(s.location.uri)}`).join('\n');
     },
 };

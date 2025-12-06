@@ -20,7 +20,7 @@ export const readProjectStructureTool: Tool = {
     execute: async (args: { maxDepth?: number }) => {
         const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!root) {
-            return "No workspace open";
+            throw new Error("No workspace open");
         }
 
         const maxDepth = args.maxDepth || 3;
@@ -28,24 +28,20 @@ export const readProjectStructureTool: Tool = {
         async function walk(dir: string, depth: number): Promise<string> {
             if (depth > maxDepth) return '';
             
-            try {
-                const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-                let result = '';
+            const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+            let result = '';
+            
+            for (const entry of entries) {
+                if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
                 
-                for (const entry of entries) {
-                    if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
-                    
-                    const indent = '  '.repeat(depth);
-                    result += `${indent}${entry.name}${entry.isDirectory() ? '/' : ''}\n`;
-                    
-                    if (entry.isDirectory()) {
-                        result += await walk(path.join(dir, entry.name), depth + 1);
-                    }
+                const indent = '  '.repeat(depth);
+                result += `${indent}${entry.name}${entry.isDirectory() ? '/' : ''}\n`;
+                
+                if (entry.isDirectory()) {
+                    result += await walk(path.join(dir, entry.name), depth + 1);
                 }
-                return result;
-            } catch (err: any) {
-                return `Error reading directory: ${err.message}`;
             }
+            return result;
         }
 
         return walk(root, 0);

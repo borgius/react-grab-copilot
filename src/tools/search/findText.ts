@@ -29,19 +29,19 @@ export const findTextTool: Tool = {
         
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!cwd) {
-            return "No workspace open";
+            throw new Error("No workspace open");
         }
 
         const command = `grep -r "${args.query}" .`;
         
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             cp.exec(command, { cwd, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
                 if (err) {
                     // Grep returns exit code 1 if no matches found, which is treated as error by exec
                     if (err.code === 1) {
                         resolve("No matches found.");
                     } else {
-                        resolve(`Error: ${err.message}\nStderr: ${stderr}`);
+                        reject(new Error(`Grep error: ${err.message}\nStderr: ${stderr}`));
                     }
                 } else {
                     // Truncate if too long

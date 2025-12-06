@@ -18,12 +18,8 @@ export const readFileTool: Tool = {
         },
     },
     execute: async (args: { filePath: string }) => {
-        try {
-            const uri = await resolvePath(args.filePath);
-            const document = await vscode.workspace.openTextDocument(uri);
-            return document.getText();
-        } catch (err: any) {
-            return `Error reading file: ${err.message}`;
-        }
+        const uri = await resolvePath(args.filePath);
+        const document = await vscode.workspace.openTextDocument(uri);
+        return document.getText();
     },
 };

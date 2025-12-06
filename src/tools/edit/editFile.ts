@@ -23,33 +23,29 @@ export const editFileTool: Tool = {
         },
     },
     execute: async (args: { filePath: string; newContent: string }) => {
+        const uri = await resolvePath(args.filePath, false);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
+        
+        const edit = new vscode.WorkspaceEdit();
         try {
-            const uri = await resolvePath(args.filePath, false);
-            await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
-            
-            const edit = new vscode.WorkspaceEdit();
-            try {
-                const document = await vscode.workspace.openTextDocument(uri);
-                const fullRange = new vscode.Range(
-                    document.positionAt(0),
-                    document.positionAt(document.getText().length)
-                );
-                edit.replace(uri, fullRange, args.newContent);
-            } catch {
-                edit.createFile(uri, { overwrite: true });
-                edit.insert(uri, new vscode.Position(0, 0), args.newContent);
-            }
-            
-            const success = await vscode.workspace.applyEdit(edit);
-            if (success) {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                await doc.save();
-                return `Successfully edited ${args.filePath}`;
-            } else {
-                return `Failed to edit ${args.filePath}`;
-            }
-        } catch (err: any) {
-            return `Error editing file: ${err.message}`;
+            const document = await vscode.workspace.openTextDocument(uri);
+            const fullRange = new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(document.getText().length)
+            );
+            edit.replace(uri, fullRange, args.newContent);
+        } catch {
+            edit.createFile(uri, { overwrite: true });
+            edit.insert(uri, new vscode.Position(0, 0), args.newContent);
         }
+        
+        const success = await vscode.workspace.applyEdit(edit);
+        if (!success) {
+            throw new Error(`Failed to edit ${args.filePath}`);
+        }
+        
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await doc.save();
+        return `Successfully edited ${args.filePath}`;
     },
 };

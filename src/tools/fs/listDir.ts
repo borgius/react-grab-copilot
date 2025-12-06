@@ -19,12 +19,8 @@ export const listDirTool: Tool = {
         },
     },
     execute: async (args: { dirPath: string }) => {
-        try {
-            const uri = await resolvePath(args.dirPath);
-            const entries = await fs.promises.readdir(uri.fsPath, { withFileTypes: true });
-            return entries.map(e => `${e.name} ${e.isDirectory() ? "(dir)" : "(file)"}`).join("\n");
-        } catch (err: any) {
-            return `Error listing directory: ${err.message}`;
-        }
+        const uri = await resolvePath(args.dirPath);
+        const entries = await fs.promises.readdir(uri.fsPath, { withFileTypes: true });
+        return entries.map(e => `${e.name} ${e.isDirectory() ? "(dir)" : "(file)"}`).join("\n");
     },
 };

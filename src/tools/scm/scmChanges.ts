@@ -12,16 +12,16 @@ export const scmChangesTool: Tool = {
         },
     },
     execute: async () => {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!cwd) {
-                resolve("No workspace open");
+                reject(new Error("No workspace open"));
                 return;
             }
             
             cp.exec('git diff HEAD', { cwd }, (err, stdout, stderr) => {
                 if (err) {
-                    resolve(`Error getting changes: ${err.message}\n${stderr}`);
+                    reject(new Error(`Git error: ${err.message}\n${stderr}`));
                 } else {
                     if (!stdout) {
                         resolve("No changes found.");

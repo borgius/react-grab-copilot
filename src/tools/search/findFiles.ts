@@ -21,11 +21,7 @@ export const findFilesTool: Tool = {
         },
     },
     execute: async (args: { pattern: string; maxResults?: number }) => {
-        try {
-            const files = await vscode.workspace.findFiles(args.pattern, null, args.maxResults || 50);
-            return files.map(f => f.fsPath).join('\n');
-        } catch (err: any) {
-            return `Error finding files: ${err.message}`;
-        }
+        const files = await vscode.workspace.findFiles(args.pattern, null, args.maxResults || 50);
+        return files.map(f => f.fsPath).join('\n');
     },
 };

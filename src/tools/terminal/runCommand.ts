@@ -18,10 +18,16 @@ export const runTerminalCommandTool: Tool = {
         },
     },
     execute: async (args: { command: string }) => {
-        return new Promise((resolve) => {
-            cp.exec(args.command, { cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath }, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => {
+            const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!cwd) {
+                reject(new Error("No workspace open"));
+                return;
+            }
+            
+            cp.exec(args.command, { cwd }, (err, stdout, stderr) => {
                 if (err) {
-                    resolve(`Error: ${err.message}\nStderr: ${stderr}`);
+                    reject(new Error(`Command failed: ${err.message}\nStderr: ${stderr}`));
                 } else {
                     resolve(stdout);
                 }
