@@ -51,25 +51,94 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  context.subscriptions.push(
-    vscode.lm.registerTool("react-grab-copilot.grabTaskCompleted", {
-      invoke: async (
-        options: vscode.LanguageModelToolInvocationOptions<{
-          requestId?: string;
-        }>,
-        _token: vscode.CancellationToken,
-      ) => {
-        const input = options.input;
-        const requestId = input.requestId;
+  const participant = vscode.chat.createChatParticipant(
+    "react-grab-copilot.participant",
+    async (request, context, stream, token) => {
+      const match = request.prompt.match(/\[request-id:([a-zA-Z0-9-]+)\]/);
+      const requestId = match ? match[1] : null;
+
+      try {
+        outputChannel.appendLine(
+          `[${new Date().toISOString()}] Chat Participant Request: ${request.prompt}`,
+        );
+
+        const model = request.model;
+
+        const systemPrompt = "<system>Following request about change React components. User selected component in browser and want to modify it based on user prompt. Pls use context to find correct one. Use the 'editFile' tool to apply changes.</system>";
+        const messages = [
+          vscode.LanguageModelChatMessage.User(systemPrompt),
+          vscode.LanguageModelChatMessage.User(request.prompt),
+        ];
+
+        const tools: vscode.LanguageModelChatTool[] = [
+          {
+            name: "editFile",
+            description: "Edit a file in the workspace with new content",
+            inputSchema: {
+              type: "object",
+              properties: {
+                filePath: {
+                  type: "string",
+                  description: "The absolute path to the file to edit",
+                },
+                newContent: {
+                  type: "string",
+                  description: "The new content of the file",
+                },
+              },
+              required: ["filePath", "newContent"],
+            },
+          },
+        ];
+
+        const chatRequest = await model.sendRequest(
+          messages,
+          {
+            modelOptions: { mode: "agent" },
+            tools,
+          },
+          token,
+        );
+
+        for await (const fragment of chatRequest.stream) {
+          if (fragment instanceof vscode.LanguageModelTextPart) {
+            stream.markdown(fragment.value);
+          } else if (fragment instanceof vscode.LanguageModelToolCallPart) {
+            if (fragment.name === "editFile") {
+              const args = fragment.input as {
+                filePath: string;
+                newContent: string;
+              };
+              try {
+                const uri = vscode.Uri.file(args.filePath);
+                const document = await vscode.workspace.openTextDocument(uri);
+                const edit = new vscode.WorkspaceEdit();
+                const fullRange = new vscode.Range(
+                  document.positionAt(0),
+                  document.positionAt(document.getText().length),
+                );
+                edit.replace(uri, fullRange, args.newContent);
+                await vscode.workspace.applyEdit(edit);
+                stream.markdown(`\n\nUpdated file: \`${args.filePath}\``);
+              } catch (err: any) {
+                stream.markdown(`\n\nError updating file: ${err.message}`);
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        stream.markdown(`Error: ${err.message}`);
+        outputChannel.appendLine(
+          `[${new Date().toISOString()}] Chat Participant Error: ${err.message}`,
+        );
+      } finally {
         if (requestId) {
           eventEmitter.emit(requestId, "done");
         }
-        return {
-          content: [{ kind: "text", value: "Task marked as completed." }],
-        };
-      },
-    }),
+      }
+    },
   );
+  context.subscriptions.push(participant);
 
   const config = vscode.workspace.getConfiguration("reactGrabCopilot");
   const port = config.get<number>("port", 6567);
@@ -99,20 +168,12 @@ export function activate(context: vscode.ExtensionContext) {
       return c.json({ error: "Prompt is required" }, 400);
     }
     const requestId = crypto.randomUUID();
-    const systemPrompt =
-      `[system]
-        Following request about change React components. User selected component in browser and want to modify it based on user prompt. 
-        Pls use context to find correct one. 
-        IMPORTANT: When you have finished all changes, you MUST call the 'grabTaskCompleted' tool with requestId "${requestId}" to signal that you are done.
-      [/system]`;
-
-    const formattedPrompt = `${systemPrompt}
-
-${prompt}
+    const formattedPrompt = `${prompt}
 
 Context:
 ${content}
-`;
+`
+// [request-id:${requestId}]`;
 
     outputChannel.appendLine(
       `[${new Date().toISOString()}] Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
@@ -135,9 +196,7 @@ ${content}
             resolve();
           }, 60000);
         });
-        outputChannel.appendLine(
-          `[${new Date().toISOString()}] Done: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
-        );
+        outputChannel.appendLine(`[${new Date().toISOString()}] Done: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`);
 
         await stream.writeSSE({ event: "done", data: "" });
       } catch (err: any) {
