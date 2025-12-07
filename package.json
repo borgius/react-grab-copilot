@@ -67,6 +67,11 @@
           "type": "boolean",
           "default": true,
           "description": "Include AGENTS.md from workspace root in the system prompt context."
+        },
+        "reactGrabCopilot.allowMcp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow the agent to use MCP (Model Context Protocol) servers configured in VS Code."
         }
       }
     }

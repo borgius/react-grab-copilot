@@ -33,6 +33,7 @@ export function registerChatParticipant(
       const config = vscode.workspace.getConfiguration("reactGrabCopilot");
       const customSystemPrompt = config.get<string>("systemPrompt");
       const useAgentsMd = config.get<boolean>("useAgentsMd", true);
+      const allowMcp = config.get<boolean>("allowMcp", false);
 
       // Read AGENTS.md if enabled
       let agentsMdContent: string | undefined;
@@ -52,7 +53,7 @@ export function registerChatParticipant(
       // Render TSX prompt
       const { messages } = await renderPrompt(
         AgentSystemPrompt,
-        { userQuery: request.prompt, customSystemPrompt, agentsMdContent },
+        { userQuery: request.prompt, customSystemPrompt, agentsMdContent, allowMcp },
         { modelMaxPromptTokens: model.maxInputTokens },
         model,
       );

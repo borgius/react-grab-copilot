@@ -11,6 +11,7 @@ export interface AgentSystemPromptProps extends BasePromptElementProps {
   userQuery: string;
   customSystemPrompt?: string;
   agentsMdContent?: string;
+  allowMcp?: boolean;
 }
 
 export const DEFAULT_SYSTEM_PROMPT = `You are an expert coding agent. Follow these rules strictly:
@@ -58,10 +59,13 @@ export class AgentSystemPrompt extends PromptElement<
     const agentsContext = this.props.agentsMdContent
       ? `\n\n## Project Guidelines (from AGENTS.md):\n${this.props.agentsMdContent}`
       : "";
+    const mcpNote = this.props.allowMcp
+      ? `\n\n## MCP (Model Context Protocol):\nYou have access to MCP servers configured in VS Code. You can use MCP tools when appropriate for the task.`
+      : "";
     return (
       <>
         <AssistantMessage priority={300}>
-          <TextChunk>{systemPrompt}{agentsContext}</TextChunk>
+          <TextChunk>{systemPrompt}{agentsContext}{mcpNote}</TextChunk>
         </AssistantMessage>
         <UserMessage priority={200}>
           <TextChunk>{this.props.userQuery}</TextChunk>
