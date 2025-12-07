@@ -1,5 +1,4 @@
-import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamResult } from '../tool';
 import * as fs from 'fs';
 import { resolvePath } from '../util/pathResolver';
 
@@ -18,9 +17,14 @@ export const listDirTool: Tool = {
             required: ['dirPath'],
         },
     },
-    execute: async (args: { dirPath: string }) => {
+    execute: async (args: { dirPath: string }, ctx: ToolContext) => {
         const uri = await resolvePath(args.dirPath);
         const entries = await fs.promises.readdir(uri.fsPath, { withFileTypes: true });
+        
+        const result = entries.map(e => `${e.isDirectory() ? "📁" : "📄"} ${e.name}`).join("\n");
+        ctx.stream.markdown(`📂 **${uri.fsPath}** (${entries.length} items)\n`);
+        streamResult(ctx, result);
+        
         return entries.map(e => `${e.name} ${e.isDirectory() ? "(dir)" : "(file)"}`).join("\n");
     },
 };

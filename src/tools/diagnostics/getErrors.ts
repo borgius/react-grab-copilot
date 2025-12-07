@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamResult } from '../tool';
 import { resolvePath } from '../util/pathResolver';
 
 export const getErrorsTool: Tool = {
@@ -16,14 +16,16 @@ export const getErrorsTool: Tool = {
             },
         },
     },
-    execute: async (args: { filePath?: string }) => {
+    execute: async (args: { filePath?: string }, ctx: ToolContext) => {
         let diagnostics: [vscode.Uri, vscode.Diagnostic[]][];
         
         if (args.filePath) {
             const uri = await resolvePath(args.filePath);
             diagnostics = [[uri, vscode.languages.getDiagnostics(uri)]];
+            ctx.stream.markdown(`🔴 **Errors in:** \`${args.filePath}\`\n`);
         } else {
             diagnostics = vscode.languages.getDiagnostics();
+            ctx.stream.markdown(`🔴 **Workspace Errors**\n`);
         }
 
         const errors = diagnostics
@@ -34,8 +36,12 @@ export const getErrorsTool: Tool = {
             );
 
         if (errors.length === 0) {
+            ctx.stream.markdown(`✅ _No errors found._\n`);
             return "No errors found.";
         }
+        
+        ctx.stream.markdown(`Found ${errors.length} error(s):\n`);
+        streamResult(ctx, errors.join('\n'));
         return errors.join('\n');
     },
 };

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamResult } from '../tool';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,7 +17,7 @@ export const readProjectStructureTool: Tool = {
             },
         },
     },
-    execute: async (args: { maxDepth?: number }) => {
+    execute: async (args: { maxDepth?: number }, ctx: ToolContext) => {
         const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!root) {
             throw new Error("No workspace open");
@@ -44,6 +44,10 @@ export const readProjectStructureTool: Tool = {
             return result;
         }
 
-        return walk(root, 0);
+        const result = await walk(root, 0);
+        ctx.stream.markdown(`🗂️ **Project Structure** (depth: ${maxDepth})\n`);
+        streamResult(ctx, result);
+        
+        return result;
     },
 };

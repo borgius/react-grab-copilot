@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamResult, streamInfo } from '../tool';
 import * as cp from 'child_process';
 
 export const runTerminalCommandTool: Tool = {
@@ -17,7 +17,7 @@ export const runTerminalCommandTool: Tool = {
             required: ['command'],
         },
     },
-    execute: async (args: { command: string }) => {
+    execute: async (args: { command: string }, ctx: ToolContext) => {
         return new Promise((resolve, reject) => {
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!cwd) {
@@ -25,10 +25,18 @@ export const runTerminalCommandTool: Tool = {
                 return;
             }
             
+            streamInfo(ctx, `Running: \`${args.command}\``);
+            
             cp.exec(args.command, { cwd }, (err, stdout, stderr) => {
                 if (err) {
+                    ctx.stream.markdown(`❌ **Command failed**\n`);
+                    streamResult(ctx, stderr || err.message);
                     reject(new Error(`Command failed: ${err.message}\nStderr: ${stderr}`));
                 } else {
+                    ctx.stream.markdown(`✅ **Command completed**\n`);
+                    if (stdout) {
+                        streamResult(ctx, stdout);
+                    }
                     resolve(stdout);
                 }
             });

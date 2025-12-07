@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamSuccess, streamInfo } from '../tool';
 import * as path from 'path';
 import { resolvePath } from '../util/pathResolver';
 
@@ -22,9 +22,11 @@ export const editFileTool: Tool = {
             required: ['filePath', 'newContent'],
         },
     },
-    execute: async (args: { filePath: string; newContent: string }) => {
+    execute: async (args: { filePath: string; newContent: string }, ctx: ToolContext) => {
         const uri = await resolvePath(args.filePath, false);
         await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
+        
+        streamInfo(ctx, `Editing: ${uri.fsPath}`);
         
         const edit = new vscode.WorkspaceEdit();
         try {
@@ -46,6 +48,9 @@ export const editFileTool: Tool = {
         
         const doc = await vscode.workspace.openTextDocument(uri);
         await doc.save();
-        return `Successfully edited ${args.filePath}`;
+        
+        const msg = `Edited: ${uri.fsPath} (${args.newContent.length} chars)`;
+        streamSuccess(ctx, msg);
+        return msg;
     },
 };

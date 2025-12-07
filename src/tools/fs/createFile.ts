@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamSuccess } from '../tool';
 import * as path from 'path';
 import { resolvePath } from '../util/pathResolver';
 
@@ -22,10 +22,13 @@ export const createFileTool: Tool = {
             required: ['filePath', 'content'],
         },
     },
-    execute: async (args: { filePath: string; content: string }) => {
+    execute: async (args: { filePath: string; content: string }, ctx: ToolContext) => {
         const uri = await resolvePath(args.filePath, false);
         await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
         await vscode.workspace.fs.writeFile(uri, Buffer.from(args.content));
-        return `Successfully created file ${args.filePath}`;
+        
+        const msg = `Created file: ${uri.fsPath} (${args.content.length} chars)`;
+        streamSuccess(ctx, msg);
+        return msg;
     },
 };

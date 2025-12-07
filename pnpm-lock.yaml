@@ -11,6 +11,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.6(hono@4.10.7)
+      '@vscode/prompt-tsx':
+        specifier: 0.4.0-alpha.5
+        version: 0.4.0-alpha.5
       hono:
         specifier: ^4.6.14
         version: 4.10.7
@@ -410,6 +413,9 @@ packages:
 
   '@vitest/utils@4.0.15':
     resolution: {integrity: sha512-HXjPW2w5dxhTD0dLwtYHDnelK3j8sR8cWIaLxr22evTyY6q8pRCjZSmhRWVjBaOVXChQd6AwMzi9pucorXCPZA==}
+
+  '@vscode/prompt-tsx@0.4.0-alpha.5':
+    resolution: {integrity: sha512-Zc7osfYG4w+BWniZGK3Yd9d4LC7MS1AGSUMllhQboxvMT6aWWNo4YnoRlko4YbEY6OWJyNmSGgWEiuT8z8Bjcg==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -839,6 +845,8 @@ snapshots:
     dependencies:
       '@vitest/pretty-format': 4.0.15
       tinyrainbow: 3.0.3
+
+  '@vscode/prompt-tsx@0.4.0-alpha.5': {}
 
   assertion-error@2.0.1: {}
 

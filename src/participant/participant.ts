@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tools/tool';
+import { Tool, ToolContext } from '../tools/tool';
 
 export function registerChatParticipant(context: vscode.ExtensionContext, tools: Tool[], outputChannel: vscode.OutputChannel) {
     const participant = vscode.chat.createChatParticipant(
@@ -19,11 +19,32 @@ export function registerChatParticipant(context: vscode.ExtensionContext, tools:
 
             const toolDefinitions = tools.map(t => t.definition);
 
+            const systemPrompt = `You are an expert coding agent. Follow these rules strictly:
+
+1. **ALWAYS use the provided Context first.** The Context section contains:
+   - The exact code snippet that needs to be modified
+   - File paths (look for patterns like "at //localhost:PORT/src/..." or "data-tsd-source" attributes)
+   - Component/function names and their locations
+
+2. **Extract file paths from context before searching.** Look for:
+   - \`data-tsd-source="/src/..."\` attributes
+   - \`at //localhost:PORT/src/...\` patterns  
+   - Explicit file path mentions like \`(at /path/to/file.tsx)\`
+
+3. **Do NOT search the entire project** when the context already tells you where the code is.
+   - If a file path is provided, use readFile on that specific file
+   - Only use findText/findFiles as a fallback when no path is given
+
+4. **Make targeted edits.** Use the extracted file path to read and edit the specific file.`;
+
             const messages: vscode.LanguageModelChatMessage[] = [
-                vscode.LanguageModelChatMessage.User(`You are an expert coding agent. Use the provided tools to help the user. 
-                
-                User Query: ${request.prompt}`)
+                vscode.LanguageModelChatMessage.User(`${systemPrompt}
+
+User Query: ${request.prompt}`)
             ];
+
+            // Create tool context for streaming
+            const toolCtx: ToolContext = { stream };
 
             try {
                 while (!token.isCancellationRequested) {
@@ -31,15 +52,26 @@ export function registerChatParticipant(context: vscode.ExtensionContext, tools:
                     
                     let responseParts: (vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart)[] = [];
                     let toolCalls: vscode.LanguageModelToolCallPart[] = [];
+                    let hasShownThinking = false;
                     
                     for await (const fragment of chatRequest.stream) {
                         if (fragment instanceof vscode.LanguageModelTextPart) {
+                            // Show thinking/reasoning from the model
+                            if (!hasShownThinking && fragment.value.trim()) {
+                                stream.markdown(`💭 **Thinking:**\n`);
+                                hasShownThinking = true;
+                            }
                             stream.markdown(fragment.value);
                             responseParts.push(fragment);
                         } else if (fragment instanceof vscode.LanguageModelToolCallPart) {
                             toolCalls.push(fragment);
                             responseParts.push(fragment);
                         }
+                    }
+                    
+                    // Add spacing after thinking if there were tool calls
+                    if (hasShownThinking && toolCalls.length > 0) {
+                        stream.markdown(`\n`);
                     }
 
                     // Correctly construct the Assistant message with all parts
@@ -51,29 +83,40 @@ export function registerChatParticipant(context: vscode.ExtensionContext, tools:
 
                     const toolResults: vscode.LanguageModelToolResultPart[] = [];
                     for (const toolCall of toolCalls) {
-                        stream.markdown(`\n\n---\n\n`);
-                        stream.markdown(`**Using Tool:** \`${toolCall.name}\`\n\n`);
-                        stream.markdown(`**Arguments:**\n\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n\n`);
+                        stream.markdown(`\n---\n🔧 **${toolCall.name}**\n`);
+                        stream.markdown(`\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n`);
                         
                         const tool = tools.find(t => t.definition.name === toolCall.name);
                         let result = "Tool not found";
                         if (tool) {
                             try {
-                                result = await tool.execute(toolCall.input, stream);
+                                // Tool handles its own streaming output
+                                result = await tool.execute(toolCall.input, toolCtx);
+                                // Ensure result is always a non-empty string
+                                if (result === undefined || result === null) {
+                                    result = "Tool returned no result";
+                                } else if (typeof result !== 'string') {
+                                    result = JSON.stringify(result, null, 2);
+                                } else if (result.trim() === '') {
+                                    result = "Tool returned empty result";
+                                }
+                                outputChannel.appendLine(`[${new Date().toISOString()}] Tool ${toolCall.name} result length: ${result.length}`);
                             } catch (err: any) {
                                 result = `Error executing tool: ${err.message}`;
+                                stream.markdown(`❌ **Error:** ${err.message}\n`);
                                 outputChannel.appendLine(`[${new Date().toISOString()}] Tool Error: ${err.message}`);
                             }
+                        } else {
+                            stream.markdown(`❌ **Error:** Tool not found\n`);
                         }
                         
-                        let displayResult = result;
-                        if (result.length > 1000) {
-                            displayResult = result.substring(0, 1000) + "\n... (truncated)";
-                        }
+                        stream.markdown(`\n`);
                         
-                        stream.markdown(`**Result:**\n\`\`\`\n${displayResult}\n\`\`\`\n\n`);
-                        
-                        toolResults.push(new vscode.LanguageModelToolResultPart(toolCall.callId, [{ kind: 'text', value: result }]));
+                        // Create proper LanguageModelTextPart for the tool result content
+                        toolResults.push(new vscode.LanguageModelToolResultPart(
+                            toolCall.callId, 
+                            [new vscode.LanguageModelTextPart(result)]
+                        ));
                     }
                     
                     messages.push(vscode.LanguageModelChatMessage.User(toolResults));

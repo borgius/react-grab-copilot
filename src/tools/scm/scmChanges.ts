@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamResult } from '../tool';
 import * as cp from 'child_process';
 
 export const scmChangesTool: Tool = {
@@ -11,7 +11,7 @@ export const scmChangesTool: Tool = {
             properties: {},
         },
     },
-    execute: async () => {
+    execute: async (_args: {}, ctx: ToolContext) => {
         return new Promise((resolve, reject) => {
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!cwd) {
@@ -19,13 +19,19 @@ export const scmChangesTool: Tool = {
                 return;
             }
             
+            ctx.stream.markdown(`📝 **Git Changes**\n`);
+            
             cp.exec('git diff HEAD', { cwd }, (err, stdout, stderr) => {
                 if (err) {
                     reject(new Error(`Git error: ${err.message}\n${stderr}`));
                 } else {
                     if (!stdout) {
+                        ctx.stream.markdown(`_No changes found._\n`);
                         resolve("No changes found.");
                     } else {
+                        const lines = stdout.split('\n').length;
+                        ctx.stream.markdown(`Found changes (${lines} lines):\n`);
+                        streamResult(ctx, stdout, 3000);
                         resolve(stdout);
                     }
                 }

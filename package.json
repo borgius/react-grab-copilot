@@ -80,6 +80,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
+    "@vscode/prompt-tsx": "0.4.0-alpha.5",
     "hono": "^4.6.14"
   }
 }

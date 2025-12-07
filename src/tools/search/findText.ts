@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamResult } from '../tool';
 import * as cp from 'child_process';
 
 export const findTextTool: Tool = {
@@ -25,13 +25,15 @@ export const findTextTool: Tool = {
             required: ['query'],
         },
     },
-    execute: async (args: { query: string; includePattern?: string; maxResults?: number }) => {
+    execute: async (args: { query: string; includePattern?: string; maxResults?: number }, ctx: ToolContext) => {
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!cwd) {
             throw new Error("No workspace open");
         }
 
         const maxResults = args.maxResults || 100;
+        
+        ctx.stream.markdown(`🔍 **Search:** \`${args.query}\`${args.includePattern ? ` in \`${args.includePattern}\`` : ''}\n`);
         
         // Build grep command with options
         // -r: recursive, -n: line numbers, -I: ignore binary files
@@ -53,26 +55,33 @@ export const findTextTool: Tool = {
                 if (err) {
                     // Grep returns exit code 1 if no matches found
                     if (err.code === 1 && !stderr) {
+                        ctx.stream.markdown(`_No matches found._\n`);
                         resolve("No matches found.");
                         return;
                     }
                     // maxBuffer exceeded - return partial results message
                     if (err.message.includes('maxBuffer')) {
-                        resolve(`Too many results. Please use a more specific query or includePattern to narrow down the search.`);
+                        const msg = `Too many results. Please use a more specific query or includePattern to narrow down the search.`;
+                        ctx.stream.markdown(`⚠️ ${msg}\n`);
+                        resolve(msg);
                         return;
                     }
                     reject(new Error(`Grep error: ${err.message}\nStderr: ${stderr}`));
                 } else {
                     // Truncate output if still too long
+                    let result = stdout;
                     if (stdout.length > 50000) {
-                        resolve(stdout.substring(0, 50000) + "\n... (output truncated, use more specific query)");
+                        result = stdout.substring(0, 50000) + "\n... (output truncated, use more specific query)";
+                    }
+                    
+                    const lines = stdout.trim().split('\n').filter(l => l);
+                    ctx.stream.markdown(`Found ${lines.length} match(es):\n`);
+                    streamResult(ctx, result, 3000);
+                    
+                    if (lines.length >= maxResults) {
+                        resolve(result + `\n... (showing first ${maxResults} results, use maxResults parameter for more)`);
                     } else {
-                        const lines = stdout.trim().split('\n').filter(l => l);
-                        if (lines.length >= maxResults) {
-                            resolve(stdout + `\n... (showing first ${maxResults} results, use maxResults parameter for more)`);
-                        } else {
-                            resolve(stdout || "No matches found.");
-                        }
+                        resolve(result || "No matches found.");
                     }
                 }
             });

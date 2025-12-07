@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamSuccess } from '../tool';
 import { resolvePath } from '../util/pathResolver';
 
 export const createDirectoryTool: Tool = {
@@ -17,9 +17,12 @@ export const createDirectoryTool: Tool = {
             required: ['dirPath'],
         },
     },
-    execute: async (args: { dirPath: string }) => {
+    execute: async (args: { dirPath: string }, ctx: ToolContext) => {
         const uri = await resolvePath(args.dirPath, false);
         await vscode.workspace.fs.createDirectory(uri);
-        return `Successfully created directory ${args.dirPath}`;
+        
+        const msg = `Created directory: ${uri.fsPath}`;
+        streamSuccess(ctx, msg);
+        return msg;
     },
 };

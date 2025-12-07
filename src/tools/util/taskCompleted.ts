@@ -1,5 +1,4 @@
-import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamSuccess } from '../tool';
 import { EventEmitter } from 'events';
 
 export const createGrabTaskCompletedTool = (eventEmitter: EventEmitter): Tool => ({
@@ -17,8 +16,9 @@ export const createGrabTaskCompletedTool = (eventEmitter: EventEmitter): Tool =>
             required: ['requestId']
         }
     },
-    execute: async (args: { requestId: string }) => {
+    execute: async (args: { requestId: string }, ctx: ToolContext) => {
         eventEmitter.emit(args.requestId, "done");
+        streamSuccess(ctx, "Task marked as completed.");
         return "Task marked as completed.";
     }
 });

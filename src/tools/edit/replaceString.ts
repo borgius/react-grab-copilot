@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Tool } from '../tool';
+import { Tool, ToolContext, streamSuccess, streamInfo } from '../tool';
 import { resolvePath } from '../util/pathResolver';
 
 export const replaceStringTool: Tool = {
@@ -25,9 +25,11 @@ export const replaceStringTool: Tool = {
             required: ['filePath', 'oldString', 'newString'],
         },
     },
-    execute: async (args: { filePath: string; oldString: string; newString: string }) => {
+    execute: async (args: { filePath: string; oldString: string; newString: string }, ctx: ToolContext) => {
         // resolvePath throws if file not found
         const uri = await resolvePath(args.filePath);
+        
+        streamInfo(ctx, `Replacing in: ${uri.fsPath}`);
         
         const document = await vscode.workspace.openTextDocument(uri);
         const text = document.getText();
@@ -87,6 +89,9 @@ export const replaceStringTool: Tool = {
         }
         
         await document.save();
+        
+        const msg = `Replaced at line ${startPos.line + 1}: "${args.oldString.substring(0, 30)}${args.oldString.length > 30 ? '...' : ''}" → "${args.newString.substring(0, 30)}${args.newString.length > 30 ? '...' : ''}"`;
+        streamSuccess(ctx, msg);
         return `Successfully replaced string in ${args.filePath}`;
     },
 };

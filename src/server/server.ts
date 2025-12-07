@@ -37,7 +37,7 @@ export function startServer(context: vscode.ExtensionContext, eventEmitter: Even
 
         const formattedPrompt = `@react-grab ${prompt}
 
-Context:
+Context (IMPORTANT - use the file path below, do not search):
 ${content}
 
 [request-id:${requestId}]`;
