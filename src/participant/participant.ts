@@ -59,7 +59,7 @@ export function registerChatParticipant(
       );
 
       // Create tool context for streaming
-      const toolCtx: ToolContext = { stream };
+      const toolCtx: ToolContext = { stream, eventEmitter, requestId };
 
       try {
         while (!token.isCancellationRequested) {
@@ -84,6 +84,10 @@ export function registerChatParticipant(
                 hasShownThinking = true;
               }
               stream.markdown(fragment.value);
+              // Emit thinking event for SSE clients
+              if (requestId && fragment.value.trim()) {
+                eventEmitter.emit(`${requestId}:status`, { thinking: fragment.value });
+              }
               responseParts.push(fragment);
             } else if (fragment instanceof vscode.LanguageModelToolCallPart) {
               toolCalls.push(fragment);
@@ -108,6 +112,10 @@ export function registerChatParticipant(
           const toolResults: vscode.LanguageModelToolResultPart[] = [];
           for (const toolCall of toolCalls) {
             stream.markdown(`\n🔧 Using **${toolCall.name}**\n`);
+            // Emit status event for SSE clients
+            if (requestId) {
+              eventEmitter.emit(`${requestId}:status`, { tool: toolCall.name, input: toolCall.input });
+            }
             // stream.markdown(
             //   `\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n`,
             // );

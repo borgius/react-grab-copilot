@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import * as crypto from "crypto";
-import { EventEmitter } from "events";
+import type { EventEmitter } from "events";
 
 export function startServer(
   context: vscode.ExtensionContext,
@@ -57,6 +57,16 @@ ${content}
           `[${new Date().toISOString()}] Processing Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
         );
         try {
+          // Set up status event listener for tool usage and thinking
+          const statusHandler = async (data: { tool?: string; input?: unknown; thinking?: string }) => {
+            if (data.tool) {
+              await stream.writeSSE({ event: "status", data: `use tool ${data.tool}` });
+            } else if (data.thinking) {
+              await stream.writeSSE({ event: "status", data: data.thinking });
+            }
+          };
+          eventEmitter.on(`${requestId}:status`, statusHandler);
+
           await vscode.commands.executeCommand("workbench.action.chat.open", {
             query: formattedPrompt,
           });
@@ -72,6 +82,9 @@ ${content}
               resolve();
             }, 60000);
           });
+
+          // Clean up status listener
+          eventEmitter.off(`${requestId}:status`, statusHandler);
           outputChannel.appendLine(
             `[${new Date().toISOString()}] Done: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
           );
