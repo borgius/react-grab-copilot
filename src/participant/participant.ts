@@ -2,11 +2,13 @@ import * as vscode from "vscode";
 import { renderPrompt } from "@vscode/prompt-tsx";
 import type { Tool, ToolContext, ToolOutput } from "../tools/tool";
 import { AgentSystemPrompt } from "../prompts/prompts";
+import type { EventEmitter } from "events";
 
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
   tools: Tool[],
   outputChannel: vscode.OutputChannel,
+  eventEmitter: EventEmitter,
 ) {
   const participant = vscode.chat.createChatParticipant(
     "react-grab-copilot.participant",
@@ -16,7 +18,7 @@ export function registerChatParticipant(
       );
 
       const match = request.prompt.match(/\[request-id:([a-zA-Z0-9-]+)\]/);
-      const _requestId = match ? match[1] : null;
+      const requestId = match ? match[1] : null;
 
       const models = await vscode.lm.selectChatModels({ family: "gpt-4" });
       const model = models[0];
@@ -133,6 +135,14 @@ export function registerChatParticipant(
         outputChannel.appendLine(
           `[${new Date().toISOString()}] Error in chat loop: ${errorMessage}`,
         );
+      } finally {
+        // Signal completion to the server if this was an API request
+        if (requestId) {
+          eventEmitter.emit(requestId, "done");
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Emitted completion for request: ${requestId}`,
+          );
+        }
       }
     },
   );

@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   const tools = getTools(eventEmitter);
-  registerChatParticipant(context, tools, outputChannel);
+  registerChatParticipant(context, tools, outputChannel, eventEmitter);
 
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
