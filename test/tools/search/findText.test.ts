@@ -24,6 +24,20 @@ describe('findTextTool', () => {
         expect(result).toContain('match2');
     });
 
+    it('should include pattern in grep command', async () => {
+        (cp.exec as any).mockImplementation((cmd, opts, cb) => {
+            cb(null, 'match1', '');
+        });
+
+        await findTextTool.execute({ query: 'search term', includePattern: '*.ts' });
+
+        expect(cp.exec).toHaveBeenCalledWith(
+            expect.stringContaining('--include="*.ts"'),
+            expect.anything(),
+            expect.anything()
+        );
+    });
+
     it('should handle no matches', async () => {
         (cp.exec as any).mockImplementation((cmd, opts, cb) => {
             const err: any = new Error('Command failed');
@@ -34,6 +48,17 @@ describe('findTextTool', () => {
         const result = await findTextTool.execute({ query: 'search term' });
 
         expect(result).toBe('No matches found.');
+    });
+
+    it('should handle maxBuffer exceeded gracefully', async () => {
+        (cp.exec as any).mockImplementation((cmd, opts, cb) => {
+            const err: any = new Error('stdout maxBuffer length exceeded');
+            cb(err, '', '');
+        });
+
+        const result = await findTextTool.execute({ query: 'search term' });
+
+        expect(result).toContain('Too many results');
     });
 
     it('should throw error on failure', async () => {
