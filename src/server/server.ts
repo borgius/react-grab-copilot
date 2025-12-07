@@ -42,7 +42,7 @@ export function startServer(
 
     const formattedPrompt = `@react-grab ${prompt}
 
-Context (IMPORTANT - use the file path below, do not search):
+Context:
 ${content}
 
 [request-id:${requestId}]`;

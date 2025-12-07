@@ -31,7 +31,7 @@
         "id": "react-grab-copilot.participant",
         "name": "react-grab",
         "description": "Ask React Grab Copilot for help",
-        "isSticky": true
+        "isSticky": false
       }
     ],
     "tools": [
