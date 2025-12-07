@@ -30,9 +30,9 @@ export const readFileTool: Tool = {
     }
 
     // Show file name with clickable link instead of full content
-    ctx.stream.markdown(`📄 `);
+    ctx.stream.markdown(`Read `);
     ctx.stream.reference(uri);
-    ctx.stream.markdown(` _(${content.split("\n").length} lines)_\n`);
+    ctx.stream.markdown(`\n`);
 
     return {
       text: `File: ${uri.fsPath}\nContent (${content.length} characters):\n\n${content}`,

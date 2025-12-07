@@ -141,7 +141,7 @@ line 5`;
     const result = await applyPatchTool.execute({ patch }, mockCtx);
 
     expect(result.text).toContain("1 file(s) succeeded");
-    expect(result.text).toContain("2 hunks");
+    expect(mockCtx.stream.reference).toHaveBeenCalled();
   });
 
   it("should throw error for invalid patch", async () => {
@@ -165,6 +165,82 @@ line 5`;
 -  console.log("hello");
 +  console.log("hello world");
  }`;
+
+    const mockDocument = {
+      getText: vi.fn().mockReturnValue(originalContent),
+      positionAt: vi.fn().mockImplementation((offset: number) => ({
+        line: 0,
+        character: offset,
+      })),
+      save: vi.fn(),
+    };
+    (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
+    (vscode.workspace.applyEdit as any).mockResolvedValue(true);
+    (vscode.workspace.fs.stat as any).mockResolvedValue({});
+
+    const result = await applyPatchTool.execute({ patch }, mockCtx);
+
+    expect(result.text).toContain("1 file(s) succeeded");
+  });
+
+  it("should handle LLM-generated patches with bare @@ markers", async () => {
+    const originalContent = `<Button
+  size="4"
+  variant="solid"
+  color="blue"
+  asChild
+  className="mt-6 cursor-pointer"
+>
+  Click me
+</Button>`;
+
+    const patch = `--- a/test.tsx
++++ b/test.tsx
+@@
+-<Button
+-  size="4"
+-  variant="solid"
+-  color="blue"
+-  asChild
+-  className="mt-6 cursor-pointer"
+->
++<Button
++  size="4"
++  variant="solid"
++  color="red"
++  asChild
++  className="mt-6 cursor-pointer"
++>`;
+
+    const mockDocument = {
+      getText: vi.fn().mockReturnValue(originalContent),
+      positionAt: vi.fn().mockImplementation((offset: number) => ({
+        line: 0,
+        character: offset,
+      })),
+      save: vi.fn(),
+    };
+    (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
+    (vscode.workspace.applyEdit as any).mockResolvedValue(true);
+    (vscode.workspace.fs.stat as any).mockResolvedValue({});
+
+    const result = await applyPatchTool.execute({ patch }, mockCtx);
+
+    expect(result.text).toContain("1 file(s) succeeded");
+  });
+
+  it("should handle multiple bare @@ hunks", async () => {
+    const originalContent = `<Button color="blue">Click</Button>
+<Box className="bg-blue-50 text-blue-600">Icon</Box>`;
+
+    const patch = `--- a/test.tsx
++++ b/test.tsx
+@@
+-<Button color="blue">Click</Button>
++<Button color="red">Click</Button>
+@@
+-<Box className="bg-blue-50 text-blue-600">Icon</Box>
++<Box className="bg-red-50 text-red-600">Icon</Box>`;
 
     const mockDocument = {
       getText: vi.fn().mockReturnValue(originalContent),

@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
-import { streamSuccess, streamInfo, streamError } from "../tool";
 import { resolvePath } from "../util/pathResolver";
 
 interface Hunk {
@@ -59,12 +58,18 @@ function parsePatch(patch: string): FilePatch[] {
           const hunkHeader = lines[i].match(
             /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/,
           );
-          if (hunkHeader) {
+
+          // Support bare @@ markers (common in LLM-generated patches)
+          const isBareHunkMarker =
+            !hunkHeader && /^@@\s*(?:.*)?$/.test(lines[i]);
+
+          if (hunkHeader || isBareHunkMarker) {
             const hunk: Hunk = {
-              oldStart: parseInt(hunkHeader[1], 10),
-              oldLines: hunkHeader[2] ? parseInt(hunkHeader[2], 10) : 1,
-              newStart: parseInt(hunkHeader[3], 10),
-              newLines: hunkHeader[4] ? parseInt(hunkHeader[4], 10) : 1,
+              // Use 0 as placeholder for bare markers - will be resolved later
+              oldStart: hunkHeader ? parseInt(hunkHeader[1], 10) : 0,
+              oldLines: hunkHeader?.[2] ? parseInt(hunkHeader[2], 10) : 1,
+              newStart: hunkHeader ? parseInt(hunkHeader[3], 10) : 0,
+              newLines: hunkHeader?.[4] ? parseInt(hunkHeader[4], 10) : 1,
               lines: [],
             };
             i++;
@@ -112,13 +117,73 @@ function parsePatch(patch: string): FilePatch[] {
   return files;
 }
 
+/**
+ * Find the line number where a hunk's removed/context lines match in the file.
+ * Returns the 1-based line number, or -1 if not found.
+ */
+function findHunkLocation(fileLines: string[], hunk: Hunk): number {
+  // Extract the lines we need to find (removed lines and context lines)
+  const searchLines: string[] = [];
+  for (const line of hunk.lines) {
+    if (line.startsWith("-")) {
+      searchLines.push(line.substring(1));
+    } else if (line.startsWith(" ")) {
+      searchLines.push(line.substring(1));
+    }
+  }
+
+  if (searchLines.length === 0) {
+    return -1;
+  }
+
+  // Search for the pattern in the file
+  for (let i = 0; i <= fileLines.length - searchLines.length; i++) {
+    let matches = true;
+    for (let j = 0; j < searchLines.length; j++) {
+      if (fileLines[i + j] !== searchLines[j]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return i + 1; // Convert to 1-based
+    }
+  }
+
+  return -1;
+}
+
 function applyHunksToText(text: string, hunks: Hunk[]): string {
   const lines = text.split("\n");
   let offset = 0;
 
   for (const hunk of hunks) {
-    const startLine = hunk.oldStart - 1 + offset;
-    const deleteCount = hunk.oldLines;
+    let startLine: number;
+    let deleteCount: number;
+
+    if (hunk.oldStart === 0) {
+      // Bare @@ marker - need to find the location by searching for context
+      const foundLine = findHunkLocation(lines, hunk);
+      if (foundLine === -1) {
+        // Try to extract what we're looking for to give a better error
+        const searchLines = hunk.lines
+          .filter((l) => l.startsWith("-") || l.startsWith(" "))
+          .map((l) => l.substring(1))
+          .slice(0, 3)
+          .join("\\n");
+        throw new Error(
+          `Could not find matching context for hunk. Looking for: "${searchLines}..."`,
+        );
+      }
+      startLine = foundLine - 1 + offset;
+      // Count the lines to delete (removed and context lines from original)
+      deleteCount = hunk.lines.filter(
+        (l) => l.startsWith("-") || l.startsWith(" "),
+      ).length;
+    } else {
+      startLine = hunk.oldStart - 1 + offset;
+      deleteCount = hunk.oldLines;
+    }
 
     const newLines: string[] = [];
     for (const line of hunk.lines) {
@@ -191,7 +256,6 @@ export const applyPatchTool: Tool = {
         }
 
         const uri = await resolvePath(fullPath);
-        streamInfo(ctx, `Applying patch to: ${uri.fsPath}`);
 
         // Read current file content
         const document = await vscode.workspace.openTextDocument(uri);
@@ -218,13 +282,15 @@ export const applyPatchTool: Tool = {
         await doc.save();
 
         successCount++;
-        const msg = `Patched: ${uri.fsPath} (${filePatch.hunks.length} hunks)`;
-        streamSuccess(ctx, msg);
-        results.push(msg);
+        // Show Copilot-style edit message
+        ctx.stream.markdown(`Edited `);
+        ctx.stream.reference(uri);
+        ctx.stream.markdown(`\n`);
+        results.push(`Edited: ${uri.fsPath}`);
       } catch (error) {
         failCount++;
         const errorMsg = `Failed to patch ${targetPath}: ${error instanceof Error ? error.message : String(error)}`;
-        streamError(ctx, errorMsg);
+        ctx.stream.markdown(`❌ ${errorMsg}\n`);
         results.push(errorMsg);
       }
     }
