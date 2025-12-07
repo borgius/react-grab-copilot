@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
-import { streamFile, streamResult } from "../tool";
 import { resolvePath } from "../util/pathResolver";
 
 export const readFileTool: Tool = {
@@ -30,8 +29,10 @@ export const readFileTool: Tool = {
       return { text: msg };
     }
 
-    streamFile(ctx, uri.fsPath, content);
-    streamResult(ctx, content, 5000);
+    // Show file name with clickable link instead of full content
+    ctx.stream.markdown(`📄 `);
+    ctx.stream.reference(uri);
+    ctx.stream.markdown(` _(${content.split("\n").length} lines)_\n`);
 
     return {
       text: `File: ${uri.fsPath}\nContent (${content.length} characters):\n\n${content}`,
