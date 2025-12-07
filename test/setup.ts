@@ -7,5 +7,6 @@ vi.mock("vscode", () => vscode);
 export const createMockContext = () => ({
   stream: {
     markdown: vi.fn(),
+    reference: vi.fn(),
   },
 });

@@ -6,6 +6,7 @@ import { listDirTool } from "./fs/listDir";
 import { readProjectStructureTool } from "./fs/readProjectStructure";
 import { editFileTool } from "./edit/editFile";
 import { replaceStringTool } from "./edit/replaceString";
+import { applyPatchTool } from "./edit/applyPatch";
 import { findFilesTool } from "./search/findFiles";
 import { findTextTool } from "./search/findText";
 import { searchWorkspaceSymbolsTool } from "./search/searchSymbols";
@@ -28,6 +29,7 @@ export const getTools = (eventEmitter: EventEmitter): Tool[] => [
   // Edit
   editFileTool,
   replaceStringTool,
+  applyPatchTool,
 
   // Search
   findFilesTool,
