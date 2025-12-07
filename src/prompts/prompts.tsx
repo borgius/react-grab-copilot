@@ -10,6 +10,7 @@ import {
 export interface AgentSystemPromptProps extends BasePromptElementProps {
   userQuery: string;
   customSystemPrompt?: string;
+  agentsMdContent?: string;
 }
 
 export const DEFAULT_SYSTEM_PROMPT = `You are an expert coding agent. Follow these rules strictly:
@@ -54,10 +55,13 @@ export class AgentSystemPrompt extends PromptElement<
 > {
   render() {
     const systemPrompt = this.props.customSystemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT;
+    const agentsContext = this.props.agentsMdContent
+      ? `\n\n## Project Guidelines (from AGENTS.md):\n${this.props.agentsMdContent}`
+      : "";
     return (
       <>
         <AssistantMessage priority={300}>
-          <TextChunk>{systemPrompt}</TextChunk>
+          <TextChunk>{systemPrompt}{agentsContext}</TextChunk>
         </AssistantMessage>
         <UserMessage priority={200}>
           <TextChunk>{this.props.userQuery}</TextChunk>

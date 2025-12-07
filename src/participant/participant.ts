@@ -32,11 +32,27 @@ export function registerChatParticipant(
       // Get custom system prompt from config
       const config = vscode.workspace.getConfiguration("reactGrabCopilot");
       const customSystemPrompt = config.get<string>("systemPrompt");
+      const useAgentsMd = config.get<boolean>("useAgentsMd", true);
+
+      // Read AGENTS.md if enabled
+      let agentsMdContent: string | undefined;
+      if (useAgentsMd) {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+          const agentsMdUri = vscode.Uri.joinPath(workspaceFolders[0].uri, "AGENTS.md");
+          try {
+            const content = await vscode.workspace.fs.readFile(agentsMdUri);
+            agentsMdContent = new TextDecoder().decode(content);
+          } catch {
+            // AGENTS.md doesn't exist, ignore
+          }
+        }
+      }
 
       // Render TSX prompt
       const { messages } = await renderPrompt(
         AgentSystemPrompt,
-        { userQuery: request.prompt, customSystemPrompt },
+        { userQuery: request.prompt, customSystemPrompt, agentsMdContent },
         { modelMaxPromptTokens: model.maxInputTokens },
         model,
       );
