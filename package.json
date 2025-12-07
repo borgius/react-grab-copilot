@@ -56,6 +56,12 @@
           "type": "number",
           "default": 6567,
           "description": "Port to listen on for the agent server"
+        },
+        "reactGrabCopilot.systemPrompt": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "description": "Custom system prompt for the agent. Leave empty to use the default prompt."
         }
       }
     }

@@ -29,10 +29,14 @@ export function registerChatParticipant(
 
       const toolDefinitions = tools.map((t) => t.definition);
 
+      // Get custom system prompt from config
+      const config = vscode.workspace.getConfiguration("reactGrabCopilot");
+      const customSystemPrompt = config.get<string>("systemPrompt");
+
       // Render TSX prompt
       const { messages } = await renderPrompt(
         AgentSystemPrompt,
-        { userQuery: request.prompt },
+        { userQuery: request.prompt, customSystemPrompt },
         { modelMaxPromptTokens: model.maxInputTokens },
         model,
       );
