@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { listDirTool } from '../../../src/tools/fs/listDir';
+import { createMockContext } from '../../setup';
 import * as fs from 'fs';
 
 vi.mock('fs', () => ({
@@ -9,6 +10,8 @@ vi.mock('fs', () => ({
 }));
 
 describe('listDirTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -20,16 +23,16 @@ describe('listDirTool', () => {
         ];
         (fs.promises.readdir as any).mockResolvedValue(mockEntries);
 
-        const result = await listDirTool.execute({ dirPath: '/path/to/dir' });
+        const result = await listDirTool.execute({ dirPath: '/path/to/dir' }, mockCtx);
 
         expect(fs.promises.readdir).toHaveBeenCalled();
-        expect(result).toContain('file.txt (file)');
-        expect(result).toContain('dir (dir)');
+        expect(result.text).toContain('file.txt (file)');
+        expect(result.text).toContain('dir (dir)');
     });
 
     it('should throw error if listing fails', async () => {
         (fs.promises.readdir as any).mockRejectedValue(new Error('Access denied'));
 
-        await expect(listDirTool.execute({ dirPath: '/path/to/dir' })).rejects.toThrow('Access denied');
+        await expect(listDirTool.execute({ dirPath: '/path/to/dir' }, mockCtx)).rejects.toThrow('Access denied');
     });
 });

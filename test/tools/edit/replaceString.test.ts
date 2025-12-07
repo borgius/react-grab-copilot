@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { replaceStringTool } from '../../../src/tools/edit/replaceString';
+import { createMockContext } from '../../setup';
 import * as vscode from 'vscode';
 
 describe('replaceStringTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -11,7 +14,7 @@ describe('replaceStringTool', () => {
         const mockContent = 'Hello world, hello universe';
         const mockDocument = {
             getText: vi.fn().mockReturnValue(mockContent),
-            positionAt: vi.fn(),
+            positionAt: vi.fn((offset) => new vscode.Position(0, offset)),
             save: vi.fn(),
         };
         (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
@@ -22,11 +25,11 @@ describe('replaceStringTool', () => {
             filePath: '/path/to/file.txt', 
             oldString: 'universe', 
             newString: 'galaxy' 
-        });
+        }, mockCtx);
 
         expect(vscode.workspace.applyEdit).toHaveBeenCalled();
         expect(mockDocument.save).toHaveBeenCalled();
-        expect(result).toContain('Successfully replaced string');
+        expect(result.text).toContain('replaced string');
     });
 
     it('should fail if oldString is not found', async () => {
@@ -41,7 +44,7 @@ describe('replaceStringTool', () => {
             filePath: '/path/to/file.txt', 
             oldString: 'universe', 
             newString: 'galaxy' 
-        })).rejects.toThrow('oldString not found');
+        }, mockCtx)).rejects.toThrow('oldString not found');
     });
 
     it('should fail if oldString is not unique', async () => {
@@ -56,14 +59,14 @@ describe('replaceStringTool', () => {
             filePath: '/path/to/file.txt', 
             oldString: 'world', 
             newString: 'galaxy' 
-        })).rejects.toThrow('oldString is not unique');
+        }, mockCtx)).rejects.toThrow('oldString is not unique');
     });
 
     it('should match with different whitespace', async () => {
         const mockContent = 'const x =  1;'; // Two spaces
         const mockDocument = {
             getText: vi.fn().mockReturnValue(mockContent),
-            positionAt: vi.fn(),
+            positionAt: vi.fn((offset) => new vscode.Position(0, offset)),
             save: vi.fn(),
         };
         (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
@@ -74,9 +77,9 @@ describe('replaceStringTool', () => {
             filePath: '/path/to/file.txt', 
             oldString: 'const x = 1;', // One space
             newString: 'const x = 2;' 
-        });
+        }, mockCtx);
 
-        expect(result).toContain('Successfully replaced string');
+        expect(result.text).toContain('replaced string');
     });
 
     it('should match when file has extra spaces but oldString does not', async () => {
@@ -94,9 +97,9 @@ describe('replaceStringTool', () => {
             filePath: '/path/to/file.tsx', 
             oldString: '"data-accent-color":"red"', 
             newString: '"data-accent-color":"blue"' 
-        });
+        }, mockCtx);
 
-        expect(result).toContain('Successfully replaced string');
+        expect(result.text).toContain('Successfully replaced string');
     });
 
     it('should fail if file is not found', async () => {
@@ -106,6 +109,6 @@ describe('replaceStringTool', () => {
             filePath: '/path/to/nonexistent.txt', 
             oldString: 'foo', 
             newString: 'bar' 
-        })).rejects.toThrow('File not found');
+        }, mockCtx)).rejects.toThrow('File not found');
     });
 });

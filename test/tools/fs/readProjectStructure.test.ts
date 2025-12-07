@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readProjectStructureTool } from '../../../src/tools/fs/readProjectStructure';
+import { createMockContext } from '../../setup';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 
@@ -10,6 +11,8 @@ vi.mock('fs', () => ({
 }));
 
 describe('readProjectStructureTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -31,11 +34,11 @@ describe('readProjectStructureTool', () => {
             return [];
         });
 
-        const result = await readProjectStructureTool.execute({});
+        const result = await readProjectStructureTool.execute({}, mockCtx);
 
-        expect(result).toContain('src/');
-        expect(result).toContain('package.json');
-        expect(result).toContain('index.ts');
+        expect(result.text).toContain('src/');
+        expect(result.text).toContain('package.json');
+        expect(result.text).toContain('index.ts');
     });
 
     it('should throw error when no workspace', async () => {
@@ -43,7 +46,7 @@ describe('readProjectStructureTool', () => {
         const originalFolders = vscode.workspace.workspaceFolders;
         (vscode.workspace as any).workspaceFolders = undefined;
 
-        await expect(readProjectStructureTool.execute({})).rejects.toThrow('No workspace open');
+        await expect(readProjectStructureTool.execute({}, mockCtx)).rejects.toThrow('No workspace open');
 
         // Restore
         (vscode.workspace as any).workspaceFolders = originalFolders;

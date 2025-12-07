@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileTool } from '../../../src/tools/fs/readFile';
+import { createMockContext } from '../../setup';
 import * as vscode from 'vscode';
 
 describe('readFileTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -15,10 +18,10 @@ describe('readFileTool', () => {
         (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
         (vscode.workspace.fs.stat as any).mockResolvedValue({}); // File exists
 
-        const result = await readFileTool.execute({ filePath: '/path/to/file.txt' });
+        const result = await readFileTool.execute({ filePath: '/path/to/file.txt' }, mockCtx);
 
         expect(vscode.workspace.openTextDocument).toHaveBeenCalled();
-        expect(result).toBe(mockContent);
+        expect(result.text).toContain(mockContent);
     });
 
     it('should throw error if file reading fails', async () => {
@@ -26,6 +29,6 @@ describe('readFileTool', () => {
         (vscode.workspace.fs.stat as any).mockResolvedValue({});
         (vscode.workspace.openTextDocument as any).mockRejectedValue(new Error(errorMessage));
 
-        await expect(readFileTool.execute({ filePath: '/path/to/file.txt' })).rejects.toThrow(errorMessage);
+        await expect(readFileTool.execute({ filePath: '/path/to/file.txt' }, mockCtx)).rejects.toThrow(errorMessage);
     });
 });

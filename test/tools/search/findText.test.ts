@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { findTextTool } from '../../../src/tools/search/findText';
+import { createMockContext } from '../../setup';
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 
@@ -8,6 +9,8 @@ vi.mock('child_process', () => ({
 }));
 
 describe('findTextTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -17,11 +20,11 @@ describe('findTextTool', () => {
             cb(null, 'match1\nmatch2', '');
         });
 
-        const result = await findTextTool.execute({ query: 'search term' });
+        const result = await findTextTool.execute({ query: 'search term' }, mockCtx);
 
         expect(cp.exec).toHaveBeenCalled();
-        expect(result).toContain('match1');
-        expect(result).toContain('match2');
+        expect(result.text).toContain('match1');
+        expect(result.text).toContain('match2');
     });
 
     it('should include pattern in grep command', async () => {
@@ -29,7 +32,7 @@ describe('findTextTool', () => {
             cb(null, 'match1', '');
         });
 
-        await findTextTool.execute({ query: 'search term', includePattern: '*.ts' });
+        await findTextTool.execute({ query: 'search term', includePattern: '*.ts' }, mockCtx);
 
         expect(cp.exec).toHaveBeenCalledWith(
             expect.stringContaining('--include="*.ts"'),
@@ -45,9 +48,9 @@ describe('findTextTool', () => {
             cb(err, '', '');
         });
 
-        const result = await findTextTool.execute({ query: 'search term' });
+        const result = await findTextTool.execute({ query: 'search term' }, mockCtx);
 
-        expect(result).toBe('No matches found.');
+        expect(result.text).toBe('No matches found.');
     });
 
     it('should handle maxBuffer exceeded gracefully', async () => {
@@ -56,9 +59,9 @@ describe('findTextTool', () => {
             cb(err, '', '');
         });
 
-        const result = await findTextTool.execute({ query: 'search term' });
+        const result = await findTextTool.execute({ query: 'search term' }, mockCtx);
 
-        expect(result).toContain('Too many results');
+        expect(result.text).toContain('Too many results');
     });
 
     it('should throw error on failure', async () => {
@@ -66,14 +69,14 @@ describe('findTextTool', () => {
             cb(new Error('Execution failed'), '', 'stderr output');
         });
 
-        await expect(findTextTool.execute({ query: 'search term' })).rejects.toThrow('Grep error: Execution failed');
+        await expect(findTextTool.execute({ query: 'search term' }, mockCtx)).rejects.toThrow('Grep error: Execution failed');
     });
 
     it('should throw error when no workspace', async () => {
         const originalFolders = vscode.workspace.workspaceFolders;
         (vscode.workspace as any).workspaceFolders = undefined;
 
-        await expect(findTextTool.execute({ query: 'search term' })).rejects.toThrow('No workspace open');
+        await expect(findTextTool.execute({ query: 'search term' }, mockCtx)).rejects.toThrow('No workspace open');
 
         (vscode.workspace as any).workspaceFolders = originalFolders;
     });

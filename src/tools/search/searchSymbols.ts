@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Tool, ToolContext, streamResult } from '../tool';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamResult } from '../tool';
 
 export const searchWorkspaceSymbolsTool: Tool = {
     definition: {
@@ -16,23 +17,24 @@ export const searchWorkspaceSymbolsTool: Tool = {
             required: ['query'],
         },
     },
-    execute: async (args: { query: string }, ctx: ToolContext) => {
+    execute: async (args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
+        const { query } = args as { query: string };
         const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
             'vscode.executeWorkspaceSymbolProvider',
-            args.query
+            query
         );
 
-        ctx.stream.markdown(`🔎 **Symbols:** \`${args.query}\`\n`);
+        ctx.stream.markdown(`🔎 **Symbols:** \`${query}\`\n`);
 
         if (!symbols || symbols.length === 0) {
             ctx.stream.markdown(`_No symbols found._\n`);
-            return "No symbols found.";
+            return { text: "No symbols found." };
         }
 
         const result = symbols.map(s => `${s.name} (${vscode.SymbolKind[s.kind]}) in ${vscode.workspace.asRelativePath(s.location.uri)}`).join('\n');
         ctx.stream.markdown(`Found ${symbols.length} symbol(s):\n`);
         streamResult(ctx, result);
         
-        return result;
+        return { text: result };
     },
 };

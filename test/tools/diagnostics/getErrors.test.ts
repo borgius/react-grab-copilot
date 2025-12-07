@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getErrorsTool } from '../../../src/tools/diagnostics/getErrors';
+import { createMockContext } from '../../setup';
 import * as vscode from 'vscode';
 
 describe('getErrorsTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -27,11 +30,11 @@ describe('getErrorsTool', () => {
         ];
         (vscode.languages.getDiagnostics as any).mockReturnValue(mockDiagnostics);
 
-        const result = await getErrorsTool.execute({});
+        const result = await getErrorsTool.execute({}, mockCtx);
 
         expect(vscode.languages.getDiagnostics).toHaveBeenCalled();
-        expect(result).toContain('Error message');
-        expect(result).not.toContain('Warning message');
+        expect(result.text).toContain('Error message');
+        expect(result.text).not.toContain('Warning message');
     });
 
     it('should get errors for specific file', async () => {
@@ -45,17 +48,17 @@ describe('getErrorsTool', () => {
         (vscode.languages.getDiagnostics as any).mockReturnValue(mockDiagnostics);
         (vscode.workspace.fs.stat as any).mockResolvedValue({});
 
-        const result = await getErrorsTool.execute({ filePath: '/path/to/file.ts' });
+        const result = await getErrorsTool.execute({ filePath: '/path/to/file.ts' }, mockCtx);
 
         expect(vscode.languages.getDiagnostics).toHaveBeenCalled();
-        expect(result).toContain('Specific error');
+        expect(result.text).toContain('Specific error');
     });
 
     it('should handle no errors', async () => {
         (vscode.languages.getDiagnostics as any).mockReturnValue([]);
 
-        const result = await getErrorsTool.execute({});
+        const result = await getErrorsTool.execute({}, mockCtx);
 
-        expect(result).toBe('No errors found.');
+        expect(result.text).toBe('No errors found.');
     });
 });

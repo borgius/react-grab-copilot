@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { findFilesTool } from '../../../src/tools/search/findFiles';
+import { createMockContext } from '../../setup';
 import * as vscode from 'vscode';
 
 describe('findFilesTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -14,16 +17,16 @@ describe('findFilesTool', () => {
         ];
         (vscode.workspace.findFiles as any).mockResolvedValue(mockFiles);
 
-        const result = await findFilesTool.execute({ pattern: '**/*.ts' });
+        const result = await findFilesTool.execute({ pattern: '**/*.ts' }, mockCtx);
 
-        expect(vscode.workspace.findFiles).toHaveBeenCalledWith('**/*.ts', null, 50);
-        expect(result).toContain('/path/to/file1.ts');
-        expect(result).toContain('/path/to/file2.ts');
+        expect(vscode.workspace.findFiles).toHaveBeenCalledWith('**/*.ts', '**/node_modules/**', 50);
+        expect(result.text).toContain('/path/to/file1.ts');
+        expect(result.text).toContain('/path/to/file2.ts');
     });
 
     it('should throw error on failure', async () => {
         (vscode.workspace.findFiles as any).mockRejectedValue(new Error('Search failed'));
 
-        await expect(findFilesTool.execute({ pattern: '**/*.ts' })).rejects.toThrow('Search failed');
+        await expect(findFilesTool.execute({ pattern: '**/*.ts' }, mockCtx)).rejects.toThrow('Search failed');
     });
 });

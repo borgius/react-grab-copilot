@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Tool, ToolContext, streamResult } from '../tool';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamResult } from '../tool';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,13 +18,14 @@ export const readProjectStructureTool: Tool = {
             },
         },
     },
-    execute: async (args: { maxDepth?: number }, ctx: ToolContext) => {
+    execute: async (args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
+        const { maxDepth: inputMaxDepth } = args as { maxDepth?: number };
         const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!root) {
             throw new Error("No workspace open");
         }
 
-        const maxDepth = args.maxDepth || 3;
+        const maxDepth = inputMaxDepth || 3;
 
         async function walk(dir: string, depth: number): Promise<string> {
             if (depth > maxDepth) return '';
@@ -48,6 +50,6 @@ export const readProjectStructureTool: Tool = {
         ctx.stream.markdown(`🗂️ **Project Structure** (depth: ${maxDepth})\n`);
         streamResult(ctx, result);
         
-        return result;
+        return { text: result };
     },
 };

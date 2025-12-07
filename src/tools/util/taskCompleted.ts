@@ -1,5 +1,6 @@
-import { Tool, ToolContext, streamSuccess } from '../tool';
-import { EventEmitter } from 'events';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamSuccess } from '../tool';
+import type { EventEmitter } from 'events';
 
 export const createGrabTaskCompletedTool = (eventEmitter: EventEmitter): Tool => ({
     definition: {
@@ -16,9 +17,10 @@ export const createGrabTaskCompletedTool = (eventEmitter: EventEmitter): Tool =>
             required: ['requestId']
         }
     },
-    execute: async (args: { requestId: string }, ctx: ToolContext) => {
-        eventEmitter.emit(args.requestId, "done");
+    execute: async (args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
+        const { requestId } = args as { requestId: string };
+        eventEmitter.emit(requestId, "done");
         streamSuccess(ctx, "Task marked as completed.");
-        return "Task marked as completed.";
+        return { text: "Task marked as completed." };
     }
 });

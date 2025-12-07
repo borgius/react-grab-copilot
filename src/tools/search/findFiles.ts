@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Tool, ToolContext, streamResult } from '../tool';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamResult } from '../tool';
 
 export const findFilesTool: Tool = {
     definition: {
@@ -20,27 +21,28 @@ export const findFilesTool: Tool = {
             required: ['pattern'],
         },
     },
-    execute: async (args: { pattern: string; maxResults?: number }, ctx: ToolContext) => {
+    execute: async (args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
+        const { pattern: inputPattern, maxResults: inputMaxResults } = args as { pattern: string; maxResults?: number };
         // Auto-add **/ prefix if pattern doesn't have a path component
-        let pattern = args.pattern;
+        let pattern = inputPattern;
         if (!pattern.includes('/') && !pattern.startsWith('**/')) {
             pattern = `**/${pattern}`;
         }
         
-        const files = await vscode.workspace.findFiles(pattern, '**/node_modules/**', args.maxResults || 50);
+        const files = await vscode.workspace.findFiles(pattern, '**/node_modules/**', inputMaxResults || 50);
         
         ctx.stream.markdown(`🔍 **Find Files:** \`${pattern}\`\n`);
         
         if (files.length === 0) {
             const msg = `No files found matching pattern: ${pattern}`;
             ctx.stream.markdown(`_${msg}_\n`);
-            return msg;
+            return { text: msg };
         }
         
         const result = files.map(f => f.fsPath).join('\n');
         ctx.stream.markdown(`Found ${files.length} file(s):\n`);
         streamResult(ctx, result);
         
-        return `Found ${files.length} file(s):\n${result}`;
+        return { text: `Found ${files.length} file(s):\n${result}` };
     },
 };

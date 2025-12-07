@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Tool, ToolContext, streamSuccess, streamInfo } from '../tool';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamSuccess, streamInfo } from '../tool';
 import { resolvePath } from '../util/pathResolver';
 
 export const replaceStringTool: Tool = {
@@ -25,9 +26,10 @@ export const replaceStringTool: Tool = {
             required: ['filePath', 'oldString', 'newString'],
         },
     },
-    execute: async (args: { filePath: string; oldString: string; newString: string }, ctx: ToolContext) => {
+    execute: async (args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
+        const { filePath, oldString, newString } = args as { filePath: string; oldString: string; newString: string };
         // resolvePath throws if file not found
-        const uri = await resolvePath(args.filePath);
+        const uri = await resolvePath(filePath);
         
         streamInfo(ctx, `Replacing in: ${uri.fsPath}`);
         
@@ -35,8 +37,8 @@ export const replaceStringTool: Tool = {
         const text = document.getText();
         
         // Try exact match first
-        let index = text.indexOf(args.oldString);
-        let matchLength = args.oldString.length;
+        let index = text.indexOf(oldString);
+        let matchLength = oldString.length;
 
         if (index === -1) {
             // Try fuzzy match (ignoring whitespace differences)
@@ -44,8 +46,8 @@ export const replaceStringTool: Tool = {
             let pattern = '';
             const punctuation = /[=:,;(){}\[\]+\-*\/><"']/;
             
-            for (let i = 0; i < args.oldString.length; i++) {
-                const char = args.oldString[i];
+            for (let i = 0; i < oldString.length; i++) {
+                const char = oldString[i];
                 if (/\s/.test(char)) {
                     pattern += '\\s+';
                 } else if (punctuation.test(char)) {
@@ -60,19 +62,19 @@ export const replaceStringTool: Tool = {
             const matches = Array.from(text.matchAll(regex));
             
             if (matches.length === 0) {
-                throw new Error(`oldString not found in ${args.filePath}. The text you're trying to replace does not exist in the file.`);
+                throw new Error(`oldString not found in ${filePath}. The text you're trying to replace does not exist in the file.`);
             }
             
             if (matches.length > 1) {
-                throw new Error(`oldString is not unique in ${args.filePath} (fuzzy match). Please provide more context to identify a unique match.`);
+                throw new Error(`oldString is not unique in ${filePath} (fuzzy match). Please provide more context to identify a unique match.`);
             }
             
-            index = matches[0].index!;
+            index = matches[0].index ?? 0;
             matchLength = matches[0][0].length;
         } else {
             // Check for multiple occurrences (exact match)
-            if (text.indexOf(args.oldString, index + 1) !== -1) {
-                throw new Error(`oldString is not unique in ${args.filePath}. Please provide more context to identify a unique match.`);
+            if (text.indexOf(oldString, index + 1) !== -1) {
+                throw new Error(`oldString is not unique in ${filePath}. Please provide more context to identify a unique match.`);
             }
         }
 
@@ -81,17 +83,17 @@ export const replaceStringTool: Tool = {
         const range = new vscode.Range(startPos, endPos);
         
         const edit = new vscode.WorkspaceEdit();
-        edit.replace(uri, range, args.newString);
+        edit.replace(uri, range, newString);
         
         const success = await vscode.workspace.applyEdit(edit);
         if (!success) {
-            throw new Error(`Failed to apply edit to ${args.filePath}`);
+            throw new Error(`Failed to apply edit to ${filePath}`);
         }
         
         await document.save();
         
-        const msg = `Replaced at line ${startPos.line + 1}: "${args.oldString.substring(0, 30)}${args.oldString.length > 30 ? '...' : ''}" → "${args.newString.substring(0, 30)}${args.newString.length > 30 ? '...' : ''}"`;
+        const msg = `Replaced at line ${startPos.line + 1}: "${oldString.substring(0, 30)}${oldString.length > 30 ? '...' : ''}" → "${newString.substring(0, 30)}${newString.length > 30 ? '...' : ''}"`;
         streamSuccess(ctx, msg);
-        return `Successfully replaced string in ${args.filePath}`;
+        return { text: `Successfully replaced string in ${filePath}` };
     },
 };

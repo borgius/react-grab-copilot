@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { editFileTool } from '../../../src/tools/edit/editFile';
+import { createMockContext } from '../../setup';
 import * as vscode from 'vscode';
 
 describe('editFileTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -17,12 +20,12 @@ describe('editFileTool', () => {
         (vscode.workspace.applyEdit as any).mockResolvedValue(true);
         (vscode.workspace.fs.stat as any).mockResolvedValue({});
 
-        const result = await editFileTool.execute({ filePath: '/path/to/file.txt', newContent: 'new content' });
+        const result = await editFileTool.execute({ filePath: '/path/to/file.txt', newContent: 'new content' }, mockCtx);
 
         expect(vscode.workspace.openTextDocument).toHaveBeenCalled();
         expect(vscode.workspace.applyEdit).toHaveBeenCalled();
         expect(mockDocument.save).toHaveBeenCalled();
-        expect(result).toContain('Successfully edited');
+        expect(result.text).toContain('Edited:');
     });
 
     it('should create a new file if it does not exist', async () => {
@@ -36,11 +39,11 @@ describe('editFileTool', () => {
         (vscode.workspace.applyEdit as any).mockResolvedValue(true);
         (vscode.workspace.fs.stat as any).mockResolvedValue({});
 
-        const result = await editFileTool.execute({ filePath: '/path/to/newfile.txt', newContent: 'content' });
+        const result = await editFileTool.execute({ filePath: '/path/to/newfile.txt', newContent: 'content' }, mockCtx);
 
         // Should try to create file via WorkspaceEdit
         // Note: The implementation calls edit.createFile and edit.insert
         expect(vscode.workspace.applyEdit).toHaveBeenCalled();
-        expect(result).toContain('Successfully edited');
+        expect(result.text).toContain('Edited:');
     });
 });

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Tool, ToolContext, streamResult } from '../tool';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamResult } from '../tool';
 import * as cp from 'child_process';
 
 export const scmChangesTool: Tool = {
@@ -11,7 +12,7 @@ export const scmChangesTool: Tool = {
             properties: {},
         },
     },
-    execute: async (_args: {}, ctx: ToolContext) => {
+    execute: async (_args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
         return new Promise((resolve, reject) => {
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!cwd) {
@@ -27,12 +28,12 @@ export const scmChangesTool: Tool = {
                 } else {
                     if (!stdout) {
                         ctx.stream.markdown(`_No changes found._\n`);
-                        resolve("No changes found.");
+                        resolve({ text: "No changes found." });
                     } else {
                         const lines = stdout.split('\n').length;
                         ctx.stream.markdown(`Found changes (${lines} lines):\n`);
                         streamResult(ctx, stdout, 3000);
-                        resolve(stdout);
+                        resolve({ text: stdout });
                     }
                 }
             });

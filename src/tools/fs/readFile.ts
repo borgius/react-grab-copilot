@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Tool, ToolContext, streamFile, streamResult } from '../tool';
+import type { Tool, ToolContext, ToolOutput } from '../tool';
+import { streamFile, streamResult } from '../tool';
 import { resolvePath } from '../util/pathResolver';
 
 export const readFileTool: Tool = {
@@ -17,20 +18,23 @@ export const readFileTool: Tool = {
             required: ['filePath'],
         },
     },
-    execute: async (args: { filePath: string }, ctx: ToolContext) => {
-        const uri = await resolvePath(args.filePath);
+    execute: async (args: unknown, ctx: ToolContext): Promise<ToolOutput> => {
+        const { filePath } = args as { filePath: string };
+        const uri = await resolvePath(filePath);
         const document = await vscode.workspace.openTextDocument(uri);
         const content = document.getText();
         
         if (!content || content.trim().length === 0) {
             const msg = `File exists but is empty: ${uri.fsPath}`;
             ctx.stream.markdown(`📄 ${msg}\n`);
-            return msg;
+            return { text: msg };
         }
         
         streamFile(ctx, uri.fsPath, content);
         streamResult(ctx, content, 5000);
         
-        return `File: ${uri.fsPath}\nContent (${content.length} characters):\n\n${content}`;
+        return { 
+            text: `File: ${uri.fsPath}\nContent (${content.length} characters):\n\n${content}`
+        };
     },
 };

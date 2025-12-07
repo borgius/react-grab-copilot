@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runTerminalCommandTool } from '../../../src/tools/terminal/runCommand';
+import { createMockContext } from '../../setup';
 import * as cp from 'child_process';
 
 vi.mock('child_process', () => ({
@@ -7,6 +8,8 @@ vi.mock('child_process', () => ({
 }));
 
 describe('runTerminalCommandTool', () => {
+    const mockCtx = createMockContext();
+
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -16,10 +19,10 @@ describe('runTerminalCommandTool', () => {
             cb(null, 'command output', '');
         });
 
-        const result = await runTerminalCommandTool.execute({ command: 'echo hello' });
+        const result = await runTerminalCommandTool.execute({ command: 'echo hello' }, mockCtx);
 
         expect(cp.exec).toHaveBeenCalledWith('echo hello', expect.anything(), expect.anything());
-        expect(result).toBe('command output');
+        expect(result.text).toBe('command output');
     });
 
     it('should throw error on failure', async () => {
@@ -27,7 +30,7 @@ describe('runTerminalCommandTool', () => {
             cb(new Error('Command failed'), '', 'stderr');
         });
 
-        await expect(runTerminalCommandTool.execute({ command: 'fail' })).rejects.toThrow('Command failed: Command failed');
+        await expect(runTerminalCommandTool.execute({ command: 'fail' }, mockCtx)).rejects.toThrow('Command failed: Command failed');
     });
 
     it('should throw error when no workspace', async () => {
@@ -35,7 +38,7 @@ describe('runTerminalCommandTool', () => {
         const originalFolders = vscode.workspace.workspaceFolders;
         (vscode.workspace as any).workspaceFolders = undefined;
 
-        await expect(runTerminalCommandTool.execute({ command: 'echo hello' })).rejects.toThrow('No workspace open');
+        await expect(runTerminalCommandTool.execute({ command: 'echo hello' }, mockCtx)).rejects.toThrow('No workspace open');
 
         (vscode.workspace as any).workspaceFolders = originalFolders;
     });
