@@ -22,14 +22,21 @@ describe('runTerminalCommandTool', () => {
         expect(result).toBe('command output');
     });
 
-    it('should handle errors', async () => {
+    it('should throw error on failure', async () => {
         (cp.exec as any).mockImplementation((cmd, opts, cb) => {
             cb(new Error('Command failed'), '', 'stderr');
         });
 
-        const result = await runTerminalCommandTool.execute({ command: 'fail' });
+        await expect(runTerminalCommandTool.execute({ command: 'fail' })).rejects.toThrow('Command failed: Command failed');
+    });
 
-        expect(result).toContain('Error: Command failed');
-        expect(result).toContain('Stderr: stderr');
+    it('should throw error when no workspace', async () => {
+        const vscode = await import('vscode');
+        const originalFolders = vscode.workspace.workspaceFolders;
+        (vscode.workspace as any).workspaceFolders = undefined;
+
+        await expect(runTerminalCommandTool.execute({ command: 'echo hello' })).rejects.toThrow('No workspace open');
+
+        (vscode.workspace as any).workspaceFolders = originalFolders;
     });
 });

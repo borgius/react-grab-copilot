@@ -36,24 +36,19 @@ describe('findTextTool', () => {
         expect(result).toBe('No matches found.');
     });
 
-    it('should handle errors', async () => {
+    it('should throw error on failure', async () => {
         (cp.exec as any).mockImplementation((cmd, opts, cb) => {
             cb(new Error('Execution failed'), '', 'stderr output');
         });
 
-        const result = await findTextTool.execute({ query: 'search term' });
-
-        expect(result).toContain('Error: Execution failed');
-        expect(result).toContain('Stderr: stderr output');
+        await expect(findTextTool.execute({ query: 'search term' })).rejects.toThrow('Grep error: Execution failed');
     });
 
-    it('should handle no workspace', async () => {
+    it('should throw error when no workspace', async () => {
         const originalFolders = vscode.workspace.workspaceFolders;
         (vscode.workspace as any).workspaceFolders = undefined;
 
-        const result = await findTextTool.execute({ query: 'search term' });
-
-        expect(result).toBe('No workspace open');
+        await expect(findTextTool.execute({ query: 'search term' })).rejects.toThrow('No workspace open');
 
         (vscode.workspace as any).workspaceFolders = originalFolders;
     });

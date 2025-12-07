@@ -37,13 +37,11 @@ describe('replaceStringTool', () => {
         (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
         (vscode.workspace.fs.stat as any).mockResolvedValue({});
 
-        const result = await replaceStringTool.execute({ 
+        await expect(replaceStringTool.execute({ 
             filePath: '/path/to/file.txt', 
             oldString: 'universe', 
             newString: 'galaxy' 
-        });
-
-        expect(result).toContain('Error: oldString not found');
+        })).rejects.toThrow('oldString not found');
     });
 
     it('should fail if oldString is not unique', async () => {
@@ -54,13 +52,11 @@ describe('replaceStringTool', () => {
         (vscode.workspace.openTextDocument as any).mockResolvedValue(mockDocument);
         (vscode.workspace.fs.stat as any).mockResolvedValue({});
 
-        const result = await replaceStringTool.execute({ 
+        await expect(replaceStringTool.execute({ 
             filePath: '/path/to/file.txt', 
             oldString: 'world', 
             newString: 'galaxy' 
-        });
-
-        expect(result).toContain('Error: oldString is not unique');
+        })).rejects.toThrow('oldString is not unique');
     });
 
     it('should match with different whitespace', async () => {
@@ -106,12 +102,10 @@ describe('replaceStringTool', () => {
     it('should fail if file is not found', async () => {
         (vscode.workspace.fs.stat as any).mockRejectedValue(new Error('File not found'));
 
-        const result = await replaceStringTool.execute({ 
+        await expect(replaceStringTool.execute({ 
             filePath: '/path/to/nonexistent.txt', 
             oldString: 'foo', 
             newString: 'bar' 
-        });
-
-        expect(result).toContain('File not found');
+        })).rejects.toThrow('File not found');
     });
 });

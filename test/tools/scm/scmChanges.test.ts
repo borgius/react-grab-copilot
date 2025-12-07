@@ -33,23 +33,19 @@ describe('scmChangesTool', () => {
         expect(result).toBe('No changes found.');
     });
 
-    it('should handle errors', async () => {
+    it('should throw error on git failure', async () => {
         (cp.exec as any).mockImplementation((cmd, opts, cb) => {
             cb(new Error('Git failed'), '', 'stderr');
         });
 
-        const result = await scmChangesTool.execute({});
-
-        expect(result).toContain('Error getting changes: Git failed');
+        await expect(scmChangesTool.execute({})).rejects.toThrow('Git error: Git failed');
     });
 
-    it('should handle no workspace', async () => {
+    it('should throw error when no workspace', async () => {
         const originalFolders = vscode.workspace.workspaceFolders;
         (vscode.workspace as any).workspaceFolders = undefined;
 
-        const result = await scmChangesTool.execute({});
-
-        expect(result).toBe('No workspace open');
+        await expect(scmChangesTool.execute({})).rejects.toThrow('No workspace open');
 
         (vscode.workspace as any).workspaceFolders = originalFolders;
     });

@@ -27,11 +27,9 @@ describe('listDirTool', () => {
         expect(result).toContain('dir (dir)');
     });
 
-    it('should return error if listing fails', async () => {
+    it('should throw error if listing fails', async () => {
         (fs.promises.readdir as any).mockRejectedValue(new Error('Access denied'));
 
-        const result = await listDirTool.execute({ dirPath: '/path/to/dir' });
-
-        expect(result).toContain('Error listing directory: Access denied');
+        await expect(listDirTool.execute({ dirPath: '/path/to/dir' })).rejects.toThrow('Access denied');
     });
 });

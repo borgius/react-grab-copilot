@@ -38,14 +38,12 @@ describe('readProjectStructureTool', () => {
         expect(result).toContain('index.ts');
     });
 
-    it('should handle no workspace', async () => {
+    it('should throw error when no workspace', async () => {
         // Temporarily remove workspace folders
         const originalFolders = vscode.workspace.workspaceFolders;
         (vscode.workspace as any).workspaceFolders = undefined;
 
-        const result = await readProjectStructureTool.execute({});
-
-        expect(result).toBe('No workspace open');
+        await expect(readProjectStructureTool.execute({})).rejects.toThrow('No workspace open');
 
         // Restore
         (vscode.workspace as any).workspaceFolders = originalFolders;

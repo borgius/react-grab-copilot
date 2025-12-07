@@ -17,11 +17,9 @@ describe('createFileTool', () => {
         expect(result).toContain('Successfully created file');
     });
 
-    it('should return error if creation fails', async () => {
+    it('should throw error if creation fails', async () => {
         (vscode.workspace.fs.createDirectory as any).mockRejectedValue(new Error('Permission denied'));
 
-        const result = await createFileTool.execute({ filePath: '/path/to/file.txt', content: 'content' });
-
-        expect(result).toContain('Error creating file: Permission denied');
+        await expect(createFileTool.execute({ filePath: '/path/to/file.txt', content: 'content' })).rejects.toThrow('Permission denied');
     });
 });

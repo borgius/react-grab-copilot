@@ -14,11 +14,9 @@ describe('createDirectoryTool', () => {
         expect(result).toContain('Successfully created directory');
     });
 
-    it('should return error if creation fails', async () => {
+    it('should throw error if creation fails', async () => {
         (vscode.workspace.fs.createDirectory as any).mockRejectedValue(new Error('Failed'));
 
-        const result = await createDirectoryTool.execute({ dirPath: '/path/to/dir' });
-
-        expect(result).toContain('Error creating directory: Failed');
+        await expect(createDirectoryTool.execute({ dirPath: '/path/to/dir' })).rejects.toThrow('Failed');
     });
 });

@@ -31,11 +31,9 @@ describe('searchWorkspaceSymbolsTool', () => {
         expect(result).toBe('No symbols found.');
     });
 
-    it('should handle errors', async () => {
+    it('should throw error on failure', async () => {
         (vscode.commands.executeCommand as any).mockRejectedValue(new Error('Command failed'));
 
-        const result = await searchWorkspaceSymbolsTool.execute({ query: 'MyClass' });
-
-        expect(result).toContain('Error searching symbols: Command failed');
+        await expect(searchWorkspaceSymbolsTool.execute({ query: 'MyClass' })).rejects.toThrow('Command failed');
     });
 });

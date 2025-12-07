@@ -21,11 +21,9 @@ describe('findFilesTool', () => {
         expect(result).toContain('/path/to/file2.ts');
     });
 
-    it('should handle errors', async () => {
+    it('should throw error on failure', async () => {
         (vscode.workspace.findFiles as any).mockRejectedValue(new Error('Search failed'));
 
-        const result = await findFilesTool.execute({ pattern: '**/*.ts' });
-
-        expect(result).toContain('Error finding files: Search failed');
+        await expect(findFilesTool.execute({ pattern: '**/*.ts' })).rejects.toThrow('Search failed');
     });
 });
