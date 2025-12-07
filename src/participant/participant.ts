@@ -59,7 +59,7 @@ export function registerChatParticipant(
             if (fragment instanceof vscode.LanguageModelTextPart) {
               // Show thinking/reasoning from the model
               if (!hasShownThinking && fragment.value.trim()) {
-                stream.markdown(`💭 **Thinking:**\n`);
+                // stream.markdown(`💭 **Thinking:**\n`);
                 hasShownThinking = true;
               }
               stream.markdown(fragment.value);
@@ -86,10 +86,10 @@ export function registerChatParticipant(
 
           const toolResults: vscode.LanguageModelToolResultPart[] = [];
           for (const toolCall of toolCalls) {
-            stream.markdown(`\n---\n🔧 **${toolCall.name}**\n`);
-            stream.markdown(
-              `\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n`,
-            );
+            stream.markdown(`\n🔧 Using **${toolCall.name}**\n`);
+            // stream.markdown(
+            //   `\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n`,
+            // );
 
             const tool = tools.find((t) => t.definition.name === toolCall.name);
             let result: ToolOutput = { text: "Tool not found" };

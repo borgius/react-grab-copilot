@@ -23,16 +23,15 @@ export const readFileTool: Tool = {
     const document = await vscode.workspace.openTextDocument(uri);
     const content = document.getText();
 
+    // Show file name with clickable link inline
+    ctx.stream.markdown(`Read `);
+    ctx.stream.anchor(uri, uri.fsPath.split("/").pop() || uri.fsPath);
+    ctx.stream.markdown(`\n`);
+
     if (!content || content.trim().length === 0) {
       const msg = `File exists but is empty: ${uri.fsPath}`;
-      ctx.stream.markdown(`📄 ${msg}\n`);
       return { text: msg };
     }
-
-    // Show file name with clickable link instead of full content
-    ctx.stream.markdown(`Read `);
-    ctx.stream.reference(uri);
-    ctx.stream.markdown(`\n`);
 
     return {
       text: `File: ${uri.fsPath}\nContent (${content.length} characters):\n\n${content}`,

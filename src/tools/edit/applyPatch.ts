@@ -282,10 +282,25 @@ export const applyPatchTool: Tool = {
         await doc.save();
 
         successCount++;
-        // Show Copilot-style edit message
-        ctx.stream.markdown(`Edited `);
-        ctx.stream.reference(uri);
-        ctx.stream.markdown(`\n`);
+        // Count added and removed lines
+        const addedLines = filePatch.hunks.reduce(
+          (sum, h) => sum + h.lines.filter((l) => l.startsWith("+")).length,
+          0,
+        );
+        const removedLines = filePatch.hunks.reduce(
+          (sum, h) => sum + h.lines.filter((l) => l.startsWith("-")).length,
+          0,
+        );
+        // Show Copilot-style edit message with colored +/- counts
+        const fileName = uri.fsPath.split("/").pop() || uri.fsPath;
+        const openCommandArgs = encodeURIComponent(JSON.stringify([uri]));
+        const md = new vscode.MarkdownString(
+          `$(file) [${fileName}](command:vscode.open?${openCommandArgs}) <span style="color:#3fb950;">+${addedLines}</span> <span style="color:#f85149;">-${removedLines}</span>\n`,
+          true,
+        );
+        md.supportHtml = true;
+        md.isTrusted = { enabledCommands: ["vscode.open"] };
+        ctx.stream.markdown(md);
         results.push(`Edited: ${uri.fsPath}`);
       } catch (error) {
         failCount++;
