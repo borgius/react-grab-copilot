@@ -298,15 +298,9 @@ export const applyPatchTool: Tool = {
           (sum, h) => sum + h.lines.filter((l) => l.startsWith("-")).length,
           0,
         );
-        // Show Copilot-style edit message with colored +/- counts
+        // Show edit message with file name and +/- counts
         const fileName = uri.fsPath.split("/").pop() || uri.fsPath;
-        const openCommandArgs = encodeURIComponent(JSON.stringify([uri]));
-        const md = new vscode.MarkdownString(
-          `$(file) [${fileName}](command:vscode.open?${openCommandArgs}) $(diff-added)${addedLines} $(diff-removed)${removedLines}\n`,
-          true,
-        );
-        md.isTrusted = { enabledCommands: ["vscode.open"] };
-        ctx.stream.markdown(md);
+        ctx.stream.markdown(`📄 **${fileName}** +${addedLines} -${removedLines}\n`);
         results.push(`Edited: ${uri.fsPath}`);
       } catch (error) {
         failCount++;
