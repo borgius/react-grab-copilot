@@ -5,6 +5,7 @@ export interface ToolContext {
   stream: vscode.ChatResponseStream;
   eventEmitter?: EventEmitter;
   requestId?: string | null;
+  outputChannel?: vscode.OutputChannel;
 }
 
 export interface Tool {

@@ -233,6 +233,13 @@ export const applyPatchTool: Tool = {
       basePath?: string;
     };
 
+    // Log patch to output channel
+    if (ctx.outputChannel) {
+      ctx.outputChannel.appendLine(`[${new Date().toISOString()}] applyPatch received:`);
+      ctx.outputChannel.appendLine(patch);
+      ctx.outputChannel.appendLine("---");
+    }
+
     const filePatchs = parsePatch(patch);
 
     if (filePatchs.length === 0) {
@@ -295,10 +302,9 @@ export const applyPatchTool: Tool = {
         const fileName = uri.fsPath.split("/").pop() || uri.fsPath;
         const openCommandArgs = encodeURIComponent(JSON.stringify([uri]));
         const md = new vscode.MarkdownString(
-          `$(file) [${fileName}](command:vscode.open?${openCommandArgs}) <span style="color:#3fb950;">+${addedLines}</span> <span style="color:#f85149;">-${removedLines}</span>\n`,
+          `$(file) [${fileName}](command:vscode.open?${openCommandArgs}) $(diff-added)${addedLines} $(diff-removed)${removedLines}\n`,
           true,
         );
-        md.supportHtml = true;
         md.isTrusted = { enabledCommands: ["vscode.open"] };
         ctx.stream.markdown(md);
         results.push(`Edited: ${uri.fsPath}`);

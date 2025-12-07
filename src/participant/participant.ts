@@ -59,7 +59,7 @@ export function registerChatParticipant(
       );
 
       // Create tool context for streaming
-      const toolCtx: ToolContext = { stream, eventEmitter, requestId };
+      const toolCtx: ToolContext = { stream, eventEmitter, requestId, outputChannel };
 
       try {
         while (!token.isCancellationRequested) {
