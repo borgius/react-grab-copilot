@@ -6,6 +6,15 @@ import { streamSSE } from "hono/streaming";
 import * as crypto from "crypto";
 import type { EventEmitter } from "events";
 
+export interface ImageData {
+  type: string;
+  data: string;
+  description?: string;
+}
+
+// Shared store for images, keyed by requestId
+export const requestImages = new Map<string, ImageData[]>();
+
 export function startServer(
   context: vscode.ExtensionContext,
   eventEmitter: EventEmitter,
@@ -32,13 +41,18 @@ export function startServer(
       return c.json({ error: "Invalid JSON" }, 400);
     }
 
-    const { prompt, content, options } = body;
+    const { prompt, content, images, options } = body;
 
     if (!prompt) {
       return c.json({ error: "Prompt is required" }, 400);
     }
 
     const requestId = crypto.randomUUID();
+
+    // Store images for the participant to retrieve
+    if (images && Array.isArray(images)) {
+      requestImages.set(requestId, images as ImageData[]);
+    }
 
     const formattedPrompt = `@react-grab ${prompt}
 
@@ -83,8 +97,9 @@ ${content}
             }, 60000);
           });
 
-          // Clean up status listener
+          // Clean up status listener and stored images
           eventEmitter.off(`${requestId}:status`, statusHandler);
+          requestImages.delete(requestId);
           outputChannel.appendLine(
             `[${new Date().toISOString()}] Done: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
           );

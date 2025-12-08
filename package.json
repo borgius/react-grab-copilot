@@ -72,6 +72,11 @@
           "type": "boolean",
           "default": false,
           "description": "Allow the agent to use MCP (Model Context Protocol) servers configured in VS Code."
+        },
+        "reactGrabCopilot.sendScreenshotToLLM": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send screenshots to the LLM for visual context. When disabled, screenshots are only shown in the chat."
         }
       }
     }

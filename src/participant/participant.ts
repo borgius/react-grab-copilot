@@ -1,8 +1,12 @@
 import * as vscode from "vscode";
+import * as os from "os";
+import * as path from "path";
+import * as fs from "fs";
 import { renderPrompt } from "@vscode/prompt-tsx";
 import type { Tool, ToolContext, ToolOutput } from "../tools/tool";
 import { AgentSystemPrompt } from "../prompts/prompts";
 import type { EventEmitter } from "events";
+import { requestImages } from "../server/server";
 
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
@@ -34,6 +38,7 @@ export function registerChatParticipant(
       const customSystemPrompt = config.get<string>("systemPrompt");
       const useAgentsMd = config.get<boolean>("useAgentsMd", true);
       const allowMcp = config.get<boolean>("allowMcp", false);
+      const sendScreenshotToLLM = config.get<boolean>("sendScreenshotToLLM", true);
 
       // Read AGENTS.md if enabled
       let agentsMdContent: string | undefined;
@@ -57,6 +62,80 @@ export function registerChatParticipant(
         { modelMaxPromptTokens: model.maxInputTokens },
         model,
       );
+
+      // If this request has images, display them in chat and optionally add to LLM message
+      if (requestId) {
+        const images = requestImages.get(requestId);
+        if (images && images.length > 0) {
+          // Display images in the chat stream by saving to temp files
+          stream.markdown("📸 **Screenshots attached:**\n\n");
+          const tempDir = path.join(os.tmpdir(), 'react-grab-copilot');
+          if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+          }
+          
+          for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            if (img.description) {
+              stream.markdown(`*${img.description}*\n\n`);
+            }
+            // Save image to temp file and try different methods to display
+            const ext = img.type.split('/')[1] || 'png';
+            const tempFile = path.join(tempDir, `screenshot-${requestId}-${i}.${ext}`);
+            const imageBuffer = Buffer.from(img.data, 'base64');
+            fs.writeFileSync(tempFile, imageBuffer);
+            
+            // Try using MarkdownString with supportHtml for img tag
+            const md = new vscode.MarkdownString();
+            md.supportHtml = true;
+            md.appendMarkdown(`<img src="${vscode.Uri.file(tempFile).toString()}" alt="Screenshot" style="max-width: 100%; max-height: 400px;" />\n\n`);
+            stream.markdown(md);
+            
+            // Also add as a reference for easy access
+            stream.reference(vscode.Uri.file(tempFile));
+          }
+          stream.markdown("---\n\n");
+          
+          // Only add images to LLM request if sendScreenshotToLLM is enabled
+          if (sendScreenshotToLLM) {
+            // Find the last user message and add images to it
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const msg = messages[i];
+              if (msg.role === vscode.LanguageModelChatMessageRole.User) {
+                // Build new content array with text and images
+                const newContent: (vscode.LanguageModelTextPart | vscode.LanguageModelDataPart)[] = [];
+                
+                // Add existing text content
+                for (const part of msg.content) {
+                  if (part instanceof vscode.LanguageModelTextPart) {
+                    newContent.push(part);
+                  }
+                }
+                
+                // Add images with descriptions
+                for (const img of images) {
+                  if (img.description) {
+                    newContent.push(new vscode.LanguageModelTextPart(`[Image: ${img.description}]`));
+                  }
+                  const imageData = Buffer.from(img.data, 'base64');
+                  newContent.push(vscode.LanguageModelDataPart.image(imageData, img.type));
+                }
+                
+                // Replace the message with one containing images
+                messages[i] = vscode.LanguageModelChatMessage.User(newContent);
+                outputChannel.appendLine(
+                  `[${new Date().toISOString()}] Added ${images.length} image(s) to LLM request`,
+                );
+                break;
+              }
+            }
+          } else {
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] Displayed ${images.length} image(s) in chat (not sent to LLM)`,
+            );
+          }
+        }
+      }
 
       // Create tool context for streaming
       const toolCtx: ToolContext = { stream, eventEmitter, requestId, outputChannel };
