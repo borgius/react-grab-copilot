@@ -140,11 +140,22 @@ export function registerChatParticipant(
       // Create tool context for streaming
       const toolCtx: ToolContext = { stream, eventEmitter, requestId, outputChannel };
 
+      // Check if any message contains images to set vision request header
+      const hasImages = messages.some(msg => 
+        msg.content.some((part: unknown) => part instanceof vscode.LanguageModelDataPart)
+      );
+
       try {
         while (!token.isCancellationRequested) {
+          const requestOptions: vscode.LanguageModelChatRequestOptions = {
+            tools: toolDefinitions,
+            // Add vision header when images are present
+            ...(hasImages && { modelOptions: { 'Copilot-Vision-Request': 'true' } }),
+          };
+          
           const chatRequest = await model.sendRequest(
             messages,
-            { tools: toolDefinitions },
+            requestOptions,
             token,
           );
 
