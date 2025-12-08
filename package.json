@@ -84,7 +84,7 @@
   "scripts": {
     "vscode:prepublish": "pnpm run build",
     "build": "vite build",
-    "watch": "vite build --watch",
+    "dev": "vite build --watch",
     "compile": "tsc -p ./",
     "lint": "biome lint .",
     "format": "biome format --write .",

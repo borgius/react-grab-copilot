@@ -30,6 +30,11 @@ export function startServer(
   const app = new Hono();
   app.use("/*", cors());
 
+  // Health check endpoint
+  app.get("/health", (c) => {
+    return c.json({ status: "ok" });
+  });
+
   // Queue for processing requests sequentially
   let requestQueue = Promise.resolve();
 
