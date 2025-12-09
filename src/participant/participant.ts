@@ -24,12 +24,22 @@ export function registerChatParticipant(
       const match = request.prompt.match(/\[request-id:([a-zA-Z0-9-]+)\]/);
       const requestId = match ? match[1] : null;
 
-      const models = await vscode.lm.selectChatModels({ family: "gpt-4" });
+      // Use the model selected by the user in GitHub Copilot chat
+      const models = await vscode.lm.selectChatModels();
       const model = models[0];
       if (!model) {
         stream.markdown("No suitable model found.");
         return;
       }
+      
+      // Check model capabilities
+      const modelCapabilities = (model as any).capabilities;
+      const supportsVision = modelCapabilities?.supportsImageToText ?? false;
+      const supportsTools = modelCapabilities?.supportsToolCalling ?? true;
+      
+      outputChannel.appendLine(
+        `[${new Date().toISOString()}] Using model: ${model.name} (${model.id}), family: ${model.family}, vendor: ${model.vendor}, vision: ${supportsVision}, tools: ${supportsTools}`,
+      );
 
       const toolDefinitions = tools.map((t) => t.definition);
 
@@ -67,6 +77,11 @@ export function registerChatParticipant(
       if (requestId) {
         const images = requestImages.get(requestId);
         if (images && images.length > 0) {
+          // Log received image types for debugging
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Received ${images.length} image(s) with types: ${images.map(img => img.type).join(', ')}`,
+          );
+          
           // Display images in the chat stream by saving to temp files
           stream.markdown("📸 **Screenshots attached:**\n\n");
           const tempDir = path.join(os.tmpdir(), 'react-grab-copilot');
@@ -96,8 +111,14 @@ export function registerChatParticipant(
           }
           stream.markdown("---\n\n");
           
-          // Only add images to LLM request if sendScreenshotToLLM is enabled
-          if (sendScreenshotToLLM) {
+          // Check if the model supports vision/image input
+          const modelSupportsVision = (model as any).capabilities?.supportsImageToText ?? false;
+          
+          // Only add images to LLM request if sendScreenshotToLLM is enabled AND model supports vision
+          if (sendScreenshotToLLM && modelSupportsVision) {
+            // Supported image MIME types by Copilot Vision API
+            const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+            
             // Find the last user message and add images to it
             for (let i = messages.length - 1; i >= 0; i--) {
               const msg = messages[i];
@@ -112,13 +133,38 @@ export function registerChatParticipant(
                   }
                 }
                 
-                // Add images with descriptions
-                for (const img of images) {
+                // Add images with descriptions - only send the first image as Copilot may only support one
+                const imagesToSend = images.slice(0, 1);
+                for (const img of imagesToSend) {
                   if (img.description) {
                     newContent.push(new vscode.LanguageModelTextPart(`[Image: ${img.description}]`));
                   }
-                  const imageData = Buffer.from(img.data, 'base64');
-                  newContent.push(vscode.LanguageModelDataPart.image(imageData, img.type));
+                  
+                  // Normalize and validate mime type
+                  let mimeType = img.type.toLowerCase();
+                  // Handle common variations
+                  if (mimeType === 'image/jpg') {
+                    mimeType = 'image/jpeg';
+                  }
+                  
+                  // Only add image if mime type is supported
+                  if (supportedMimeTypes.includes(mimeType)) {
+                    const imageData = Buffer.from(img.data, 'base64');
+                    newContent.push(vscode.LanguageModelDataPart.image(imageData, mimeType));
+                  } else {
+                    outputChannel.appendLine(
+                      `[${new Date().toISOString()}] Skipping image with unsupported mime type: ${img.type}`,
+                    );
+                    // Add text description instead
+                    newContent.push(new vscode.LanguageModelTextPart(`[Unsupported image format: ${img.type}]`));
+                  }
+                }
+                
+                // Log if additional images were skipped
+                if (images.length > 1) {
+                  outputChannel.appendLine(
+                    `[${new Date().toISOString()}] Note: Only first image sent to LLM, ${images.length - 1} additional image(s) skipped`,
+                  );
                 }
                 
                 // Replace the message with one containing images
@@ -129,9 +175,14 @@ export function registerChatParticipant(
                 break;
               }
             }
+          } else if (sendScreenshotToLLM && !modelSupportsVision) {
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] Model ${model.name} does not support vision - images displayed but not sent to LLM`,
+            );
+            stream.markdown(`⚠️ *Note: The current model (${model.name}) does not support image input. Images are displayed above but not analyzed.*\n\n`);
           } else {
             outputChannel.appendLine(
-              `[${new Date().toISOString()}] Displayed ${images.length} image(s) in chat (not sent to LLM)`,
+              `[${new Date().toISOString()}] Displayed ${images.length} image(s) in chat (sendScreenshotToLLM disabled)`,
             );
           }
         }
