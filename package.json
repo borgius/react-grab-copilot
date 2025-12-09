@@ -77,6 +77,12 @@
           "type": "boolean",
           "default": true,
           "description": "Send screenshots to the LLM for visual context. When disabled, screenshots are only shown in the chat."
+        },
+        "reactGrabCopilot.logLevel": {
+          "type": "string",
+          "default": "INFO",
+          "enum": ["DEBUG", "INFO", "WARN", "ERROR"],
+          "description": "Log level for the extension output. DEBUG shows detailed LLM request/response information."
         }
       }
     }

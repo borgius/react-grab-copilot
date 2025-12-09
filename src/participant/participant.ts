@@ -58,6 +58,8 @@ export function registerChatParticipant(
       const customSystemPrompt = config.get<string>("systemPrompt");
       const useAgentsMd = config.get<boolean>("useAgentsMd", true);
       const allowMcp = config.get<boolean>("allowMcp", false);
+      const logLevel = config.get<string>("logLevel", "INFO");
+      const isDebug = logLevel === "DEBUG";
 
       // Read AGENTS.md if enabled
       let agentsMdContent: string | undefined;
@@ -121,41 +123,43 @@ export function registerChatParticipant(
             ...(hasImages && { modelOptions: { 'Copilot-Vision-Request': 'true' } }),
           };
           
-          // Log full request to LLM
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] === LLM Request ===`,
-          );
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Model: ${model.name} (${model.id})`,
-          );
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Request Options: ${JSON.stringify(requestOptions, null, 2)}`,
-          );
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Messages (${messages.length}):`,
-          );
-          for (let i = 0; i < messages.length; i++) {
-            const msg = messages[i];
-            const role = msg.role === vscode.LanguageModelChatMessageRole.User ? 'User' : 'Assistant';
-            const contentPreview = msg.content.map((part: unknown) => {
-              if (part instanceof vscode.LanguageModelTextPart) {
-                return `Text(${part.value.length} chars): ${part.value.substring(0, 500)}${part.value.length > 500 ? '...' : ''}`;
-              } else if (part instanceof vscode.LanguageModelToolCallPart) {
-                return `ToolCall: ${part.name}(${JSON.stringify(part.input)})`;
-              } else if (part instanceof vscode.LanguageModelToolResultPart) {
-                return `ToolResult: callId=${part.callId}`;
-              } else if (part instanceof vscode.LanguageModelDataPart) {
-                return `DataPart: image`;
-              }
-              return `Unknown: ${typeof part}`;
-            }).join(', ');
+          // Log full request to LLM (only at DEBUG level)
+          if (isDebug) {
             outputChannel.appendLine(
-              `[${new Date().toISOString()}]   [${i}] ${role}: ${contentPreview}`,
+              `[${new Date().toISOString()}] === LLM Request ===`,
+            );
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] Model: ${model.name} (${model.id})`,
+            );
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] Request Options: ${JSON.stringify(requestOptions, null, 2)}`,
+            );
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] Messages (${messages.length}):`,
+            );
+            for (let i = 0; i < messages.length; i++) {
+              const msg = messages[i];
+              const role = msg.role === vscode.LanguageModelChatMessageRole.User ? 'User' : 'Assistant';
+              const contentPreview = msg.content.map((part: unknown) => {
+                if (part instanceof vscode.LanguageModelTextPart) {
+                  return `Text(${part.value.length} chars): ${part.value.substring(0, 500)}${part.value.length > 500 ? '...' : ''}`;
+                } else if (part instanceof vscode.LanguageModelToolCallPart) {
+                  return `ToolCall: ${part.name}(${JSON.stringify(part.input)})`;
+                } else if (part instanceof vscode.LanguageModelToolResultPart) {
+                  return `ToolResult: callId=${part.callId}`;
+                } else if (part instanceof vscode.LanguageModelDataPart) {
+                  return `DataPart: image`;
+                }
+                return `Unknown: ${typeof part}`;
+              }).join(', ');
+              outputChannel.appendLine(
+                `[${new Date().toISOString()}]   [${i}] ${role}: ${contentPreview}`,
+              );
+            }
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] === End LLM Request ===`,
             );
           }
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] === End LLM Request ===`,
-          );
           
           const chatRequest = await model.sendRequest(
             messages,
