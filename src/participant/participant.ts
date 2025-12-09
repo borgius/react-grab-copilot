@@ -6,6 +6,79 @@ import type { EventEmitter } from "events";
 import { requestImages } from "../server/server";
 import { createScreenshotTool } from "../tools/screenshots/getScreenshot";
 
+/**
+ * Parses source file references from the prompt.
+ * Looks for patterns like:
+ * Source Files:
+ *   - /src/routes/index.tsx:53:15
+ *   - /src/routes/index.tsx:25:11
+ * 
+ * Returns the first source file reference with path and line number.
+ */
+function parseSourceFileReference(prompt: string): { path: string; line: number } | null {
+  // Match "Source Files:" section with file paths like "/src/routes/index.tsx:53:15"
+  const sourceFilesMatch = prompt.match(/Source Files:\s*([\s\S]*?)(?:\n\n|$)/i);
+  if (!sourceFilesMatch) {
+    return null;
+  }
+  
+  // Extract the first file path with line number
+  // Pattern: - /path/to/file.ext:lineNumber:columnNumber (column is optional)
+  const fileMatch = sourceFilesMatch[1].match(/^\s*-\s*([^:\s]+):(\d+)(?::\d+)?/m);
+  if (!fileMatch) {
+    return null;
+  }
+  
+  return {
+    path: fileMatch[1],
+    line: parseInt(fileMatch[2], 10),
+  };
+}
+
+/**
+ * Reads source code context around a specific line from a file.
+ * Returns ±contextLines lines around the specified line.
+ */
+async function getSourceContext(
+  filePath: string,
+  lineNumber: number,
+  contextLines: number = 10,
+): Promise<string | null> {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
+    return null;
+  }
+  
+  // Resolve the file path relative to workspace
+  const workspaceRoot = workspaceFolders[0].uri;
+  const fileUri = vscode.Uri.joinPath(workspaceRoot, filePath);
+  
+  try {
+    const content = await vscode.workspace.fs.readFile(fileUri);
+    const text = new TextDecoder().decode(content);
+    const lines = text.split("\n");
+    
+    // Calculate start and end lines (1-indexed to 0-indexed)
+    const startLine = Math.max(0, lineNumber - 1 - contextLines);
+    const endLine = Math.min(lines.length - 1, lineNumber - 1 + contextLines);
+    
+    // Extract the relevant lines with line numbers
+    const contextBlock = lines
+      .slice(startLine, endLine + 1)
+      .map((line, idx) => {
+        const actualLineNum = startLine + idx + 1;
+        const marker = actualLineNum === lineNumber ? ">" : " ";
+        return `${marker}${actualLineNum.toString().padStart(4)}: ${line}`;
+      })
+      .join("\n");
+    
+    return `\n\n## Source Context (${filePath}:${lineNumber}):\n\`\`\`\n${contextBlock}\n\`\`\``;
+  } catch {
+    // File not found or couldn't be read
+    return null;
+  }
+}
+
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
   tools: Tool[],
@@ -76,10 +149,35 @@ export function registerChatParticipant(
         }
       }
 
+      // Parse source file references from the prompt and get context
+      let userQuery = request.prompt;
+      const sourceRef = parseSourceFileReference(request.prompt);
+      if (sourceRef) {
+        outputChannel.appendLine(
+          `[${new Date().toISOString()}] Found source reference: ${sourceRef.path}:${sourceRef.line}`,
+        );
+        const sourceContext = await getSourceContext(sourceRef.path, sourceRef.line, 10);
+        if (sourceContext) {
+          userQuery = request.prompt + sourceContext;
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Added source context from ${sourceRef.path}`,
+          );
+          if (isDebug) {
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}] Source Context:\n${sourceContext}`,
+            );
+          }
+        } else {
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Could not read source file: ${sourceRef.path}`,
+          );
+        }
+      }
+
       // Render TSX prompt
       const { messages } = await renderPrompt(
         AgentSystemPrompt,
-        { userQuery: request.prompt, customSystemPrompt, agentsMdContent, allowMcp },
+        { userQuery, customSystemPrompt, agentsMdContent, allowMcp },
         { modelMaxPromptTokens: model.maxInputTokens },
         model,
       );
