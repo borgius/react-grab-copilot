@@ -19,6 +19,12 @@ export interface ToolOutput {
   text: string;
   // Optional TSX element to render (for richer output)
   tsx?: unknown;
+  // Optional image to include in the response
+  image?: {
+    data: string; // base64 encoded
+    mimeType: string;
+    description?: string;
+  };
 }
 
 // Helper to create simple text output

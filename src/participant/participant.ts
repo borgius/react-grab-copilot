@@ -1,12 +1,10 @@
 import * as vscode from "vscode";
-import * as os from "os";
-import * as path from "path";
-import * as fs from "fs";
 import { renderPrompt } from "@vscode/prompt-tsx";
 import type { Tool, ToolContext, ToolOutput } from "../tools/tool";
 import { AgentSystemPrompt } from "../prompts/prompts";
 import type { EventEmitter } from "events";
 import { requestImages } from "../server/server";
+import { createScreenshotTool } from "../tools/screenshots/getScreenshot";
 
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
@@ -41,14 +39,25 @@ export function registerChatParticipant(
         `[${new Date().toISOString()}] Using model: ${model.name} (${model.id}), family: ${model.family}, vendor: ${model.vendor}, vision: ${supportsVision}, tools: ${supportsTools}`,
       );
 
-      const toolDefinitions = tools.map((t) => t.definition);
+      // Build the list of available tools
+      const availableTools: Tool[] = [...tools];
+      
+      // Add screenshot tool if this request has images AND model supports vision
+      const screenshotTool = createScreenshotTool(requestId);
+      if (screenshotTool && supportsVision) {
+        availableTools.push(screenshotTool);
+        outputChannel.appendLine(
+          `[${new Date().toISOString()}] Added get_screenshot tool for this request`,
+        );
+      }
+      
+      const toolDefinitions = availableTools.map((t) => t.definition);
 
       // Get custom system prompt from config
       const config = vscode.workspace.getConfiguration("reactGrabCopilot");
       const customSystemPrompt = config.get<string>("systemPrompt");
       const useAgentsMd = config.get<boolean>("useAgentsMd", true);
       const allowMcp = config.get<boolean>("allowMcp", false);
-      const sendScreenshotToLLM = config.get<boolean>("sendScreenshotToLLM", true);
 
       // Read AGENTS.md if enabled
       let agentsMdContent: string | undefined;
@@ -73,7 +82,7 @@ export function registerChatParticipant(
         model,
       );
 
-      // If this request has images, display them in chat and optionally add to LLM message
+      // If this request has images, log them (display happens when tool is called)
       if (requestId) {
         const images = requestImages.get(requestId);
         if (images && images.length > 0) {
@@ -82,108 +91,16 @@ export function registerChatParticipant(
             `[${new Date().toISOString()}] Received ${images.length} image(s) with types: ${images.map(img => img.type).join(', ')}`,
           );
           
-          // Display images in the chat stream by saving to temp files
-          stream.markdown("📸 **Screenshots attached:**\n\n");
-          const tempDir = path.join(os.tmpdir(), 'react-grab-copilot');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-          
-          for (let i = 0; i < images.length; i++) {
-            const img = images[i];
-            if (img.description) {
-              stream.markdown(`*${img.description}*\n\n`);
-            }
-            // Save image to temp file and try different methods to display
-            const ext = img.type.split('/')[1] || 'png';
-            const tempFile = path.join(tempDir, `screenshot-${requestId}-${i}.${ext}`);
-            const imageBuffer = Buffer.from(img.data, 'base64');
-            fs.writeFileSync(tempFile, imageBuffer);
-            
-            // Try using MarkdownString with supportHtml for img tag
-            const md = new vscode.MarkdownString();
-            md.supportHtml = true;
-            md.appendMarkdown(`<img src="${vscode.Uri.file(tempFile).toString()}" alt="Screenshot" style="max-width: 100%; max-height: 400px;" />\n\n`);
-            stream.markdown(md);
-            
-            // Also add as a reference for easy access
-            stream.reference(vscode.Uri.file(tempFile));
-          }
-          stream.markdown("---\n\n");
-          
-          // Check if the model supports vision/image input
-          const modelSupportsVision = (model as any).capabilities?.supportsImageToText ?? false;
-          
-          // Only add images to LLM request if sendScreenshotToLLM is enabled AND model supports vision
-          if (sendScreenshotToLLM && modelSupportsVision) {
-            // Supported image MIME types by Copilot Vision API
-            const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-            
-            // Find the last user message and add images to it
-            for (let i = messages.length - 1; i >= 0; i--) {
-              const msg = messages[i];
-              if (msg.role === vscode.LanguageModelChatMessageRole.User) {
-                // Build new content array with text and images
-                const newContent: (vscode.LanguageModelTextPart | vscode.LanguageModelDataPart)[] = [];
-                
-                // Add existing text content
-                for (const part of msg.content) {
-                  if (part instanceof vscode.LanguageModelTextPart) {
-                    newContent.push(part);
-                  }
-                }
-                
-                // Add images with descriptions - only send the first image as Copilot may only support one
-                const imagesToSend = images.slice(0, 1);
-                for (const img of imagesToSend) {
-                  if (img.description) {
-                    newContent.push(new vscode.LanguageModelTextPart(`[Image: ${img.description}]`));
-                  }
-                  
-                  // Normalize and validate mime type
-                  let mimeType = img.type.toLowerCase();
-                  // Handle common variations
-                  if (mimeType === 'image/jpg') {
-                    mimeType = 'image/jpeg';
-                  }
-                  
-                  // Only add image if mime type is supported
-                  if (supportedMimeTypes.includes(mimeType)) {
-                    const imageData = Buffer.from(img.data, 'base64');
-                    newContent.push(vscode.LanguageModelDataPart.image(imageData, mimeType));
-                  } else {
-                    outputChannel.appendLine(
-                      `[${new Date().toISOString()}] Skipping image with unsupported mime type: ${img.type}`,
-                    );
-                    // Add text description instead
-                    newContent.push(new vscode.LanguageModelTextPart(`[Unsupported image format: ${img.type}]`));
-                  }
-                }
-                
-                // Log if additional images were skipped
-                if (images.length > 1) {
-                  outputChannel.appendLine(
-                    `[${new Date().toISOString()}] Note: Only first image sent to LLM, ${images.length - 1} additional image(s) skipped`,
-                  );
-                }
-                
-                // Replace the message with one containing images
-                messages[i] = vscode.LanguageModelChatMessage.User(newContent);
-                outputChannel.appendLine(
-                  `[${new Date().toISOString()}] Added ${images.length} image(s) to LLM request`,
-                );
-                break;
-              }
-            }
-          } else if (sendScreenshotToLLM && !modelSupportsVision) {
+          // If model supports vision, inform the model about the screenshot tool
+          if (supportsVision) {
             outputChannel.appendLine(
-              `[${new Date().toISOString()}] Model ${model.name} does not support vision - images displayed but not sent to LLM`,
+              `[${new Date().toISOString()}] Model supports vision - get_screenshot tool available for ${images.length} image(s)`,
             );
-            stream.markdown(`⚠️ *Note: The current model (${model.name}) does not support image input. Images are displayed above but not analyzed.*\n\n`);
           } else {
             outputChannel.appendLine(
-              `[${new Date().toISOString()}] Displayed ${images.length} image(s) in chat (sendScreenshotToLLM disabled)`,
+              `[${new Date().toISOString()}] Model ${model.name} does not support vision - screenshots cannot be analyzed`,
             );
+            stream.markdown(`⚠️ *Note: The current model (${model.name}) does not support image input. Screenshots cannot be analyzed.*\n\n`);
           }
         }
       }
@@ -203,6 +120,42 @@ export function registerChatParticipant(
             // Add vision header when images are present
             ...(hasImages && { modelOptions: { 'Copilot-Vision-Request': 'true' } }),
           };
+          
+          // Log full request to LLM
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] === LLM Request ===`,
+          );
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Model: ${model.name} (${model.id})`,
+          );
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Request Options: ${JSON.stringify(requestOptions, null, 2)}`,
+          );
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] Messages (${messages.length}):`,
+          );
+          for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            const role = msg.role === vscode.LanguageModelChatMessageRole.User ? 'User' : 'Assistant';
+            const contentPreview = msg.content.map((part: unknown) => {
+              if (part instanceof vscode.LanguageModelTextPart) {
+                return `Text(${part.value.length} chars): ${part.value.substring(0, 500)}${part.value.length > 500 ? '...' : ''}`;
+              } else if (part instanceof vscode.LanguageModelToolCallPart) {
+                return `ToolCall: ${part.name}(${JSON.stringify(part.input)})`;
+              } else if (part instanceof vscode.LanguageModelToolResultPart) {
+                return `ToolResult: callId=${part.callId}`;
+              } else if (part instanceof vscode.LanguageModelDataPart) {
+                return `DataPart: image`;
+              }
+              return `Unknown: ${typeof part}`;
+            }).join(', ');
+            outputChannel.appendLine(
+              `[${new Date().toISOString()}]   [${i}] ${role}: ${contentPreview}`,
+            );
+          }
+          outputChannel.appendLine(
+            `[${new Date().toISOString()}] === End LLM Request ===`,
+          );
           
           const chatRequest = await model.sendRequest(
             messages,
@@ -261,7 +214,7 @@ export function registerChatParticipant(
             //   `\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n`,
             // );
 
-            const tool = tools.find((t) => t.definition.name === toolCall.name);
+            const tool = availableTools.find((t) => t.definition.name === toolCall.name);
             let result: ToolOutput = { text: "Tool not found" };
             if (tool) {
               try {
@@ -289,11 +242,23 @@ export function registerChatParticipant(
 
             stream.markdown(`\n`);
 
-            // Create proper LanguageModelTextPart for the tool result content
+            // Build tool result content - include image if returned
+            const resultContent: (vscode.LanguageModelTextPart | vscode.LanguageModelDataPart)[] = [
+              new vscode.LanguageModelTextPart(result.text),
+            ];
+            
+            // If the tool returned an image, add it to the result
+            if (result.image && supportsVision) {
+              const imageData = Buffer.from(result.image.data, 'base64');
+              resultContent.push(vscode.LanguageModelDataPart.image(imageData, result.image.mimeType));
+              outputChannel.appendLine(
+                `[${new Date().toISOString()}] Including image in tool result: ${result.image.description || 'screenshot'}`,
+              );
+            }
+
+            // Create proper LanguageModelToolResultPart with the content
             toolResults.push(
-              new vscode.LanguageModelToolResultPart(toolCall.callId, [
-                new vscode.LanguageModelTextPart(result.text),
-              ]),
+              new vscode.LanguageModelToolResultPart(toolCall.callId, resultContent),
             );
           }
 
