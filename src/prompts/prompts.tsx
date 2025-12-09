@@ -2,8 +2,8 @@ import type { BasePromptElementProps, PromptSizing } from "@vscode/prompt-tsx";
 import {
   AssistantMessage,
   PromptElement,
-  UserMessage,
   TextChunk,
+  UserMessage,
 } from "@vscode/prompt-tsx";
 
 /* System prompt for the agent */
@@ -48,14 +48,13 @@ export const DEFAULT_SYSTEM_PROMPT = `You are an expert coding agent. Follow the
 8. **Take action, don't describe action.** Instead of saying "I can update X in file Y", just DO IT.
 `;
 
-
-
 export class AgentSystemPrompt extends PromptElement<
   AgentSystemPromptProps,
   undefined
 > {
   render() {
-    const systemPrompt = this.props.customSystemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT;
+    const systemPrompt =
+      this.props.customSystemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT;
     const agentsContext = this.props.agentsMdContent
       ? `\n\n## Project Guidelines (from AGENTS.md):\n${this.props.agentsMdContent}`
       : "";
@@ -65,7 +64,11 @@ export class AgentSystemPrompt extends PromptElement<
     return (
       <>
         <AssistantMessage priority={300}>
-          <TextChunk>{systemPrompt}{agentsContext}{mcpNote}</TextChunk>
+          <TextChunk>
+            {systemPrompt}
+            {agentsContext}
+            {mcpNote}
+          </TextChunk>
         </AssistantMessage>
         <UserMessage priority={200}>
           <TextChunk>{this.props.userQuery}</TextChunk>

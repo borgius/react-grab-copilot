@@ -1,5 +1,5 @@
-import type * as vscode from "vscode";
 import type { EventEmitter } from "events";
+import type * as vscode from "vscode";
 
 export interface ToolContext {
   stream: vscode.ChatResponseStream;

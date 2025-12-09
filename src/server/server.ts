@@ -1,10 +1,10 @@
-import * as vscode from "vscode";
 import { serve } from "@hono/node-server";
+import * as crypto from "crypto";
+import type { EventEmitter } from "events";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import * as crypto from "crypto";
-import type { EventEmitter } from "events";
+import * as vscode from "vscode";
 
 export interface ImageData {
   type: string;
@@ -77,9 +77,16 @@ ${content}
         );
         try {
           // Set up status event listener for tool usage and thinking
-          const statusHandler = async (data: { tool?: string; input?: unknown; thinking?: string }) => {
+          const statusHandler = async (data: {
+            tool?: string;
+            input?: unknown;
+            thinking?: string;
+          }) => {
             if (data.tool) {
-              await stream.writeSSE({ event: "status", data: `use tool ${data.tool}` });
+              await stream.writeSSE({
+                event: "status",
+                data: `use tool ${data.tool}`,
+              });
             } else if (data.thinking) {
               await stream.writeSSE({ event: "status", data: data.thinking });
             }

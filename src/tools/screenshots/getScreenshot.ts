@@ -1,9 +1,9 @@
-import * as vscode from "vscode";
+import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import * as fs from "fs";
+import * as vscode from "vscode";
+import { type ImageData, requestImages } from "../../server/server";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
-import { requestImages, type ImageData } from "../../server/server";
 
 export interface GetScreenshotInput {
   index: number;
@@ -24,10 +24,12 @@ export function createScreenshotTool(requestId: string | null): Tool | null {
   }
 
   // Build description with available screenshots
-  const screenshotDescriptions = images.map((img, i) => {
-    const desc = img.description || `Screenshot ${i + 1}`;
-    return `  - Index ${i}: ${desc} (${img.type})`;
-  }).join('\n');
+  const screenshotDescriptions = images
+    .map((img, i) => {
+      const desc = img.description || `Screenshot ${i + 1}`;
+      return `  - Index ${i}: ${desc} (${img.type})`;
+    })
+    .join("\n");
 
   return {
     definition: {
@@ -49,9 +51,12 @@ Call this tool with the index of the screenshot you want to view. The image will
         required: ["index"],
       },
     },
-    execute: async (input: GetScreenshotInput, ctx: ToolContext): Promise<ToolOutput> => {
+    execute: async (
+      input: GetScreenshotInput,
+      ctx: ToolContext,
+    ): Promise<ToolOutput> => {
       const { index } = input;
-      
+
       // Re-fetch images in case they changed
       const currentImages = requestImages.get(requestId);
       if (!currentImages || currentImages.length === 0) {
@@ -59,8 +64,8 @@ Call this tool with the index of the screenshot you want to view. The image will
       }
 
       if (index < 0 || index >= currentImages.length) {
-        return { 
-          text: `Invalid screenshot index. Please use an index between 0 and ${currentImages.length - 1}.` 
+        return {
+          text: `Invalid screenshot index. Please use an index between 0 and ${currentImages.length - 1}.`,
         };
       }
 
@@ -76,20 +81,25 @@ Call this tool with the index of the screenshot you want to view. The image will
       if (img.description) {
         ctx.stream.markdown(`*${img.description}*\n\n`);
       }
-      
+
       // Save image to temp file for display
-      const tempDir = path.join(os.tmpdir(), 'react-grab-copilot');
+      const tempDir = path.join(os.tmpdir(), "react-grab-copilot");
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
-      const ext = img.type.split('/')[1] || 'png';
-      const tempFile = path.join(tempDir, `screenshot-${requestId}-${index}.${ext}`);
-      const imageBuffer = Buffer.from(img.data, 'base64');
+      const ext = img.type.split("/")[1] || "png";
+      const tempFile = path.join(
+        tempDir,
+        `screenshot-${requestId}-${index}.${ext}`,
+      );
+      const imageBuffer = Buffer.from(img.data, "base64");
       fs.writeFileSync(tempFile, imageBuffer);
-      
+
       const md = new vscode.MarkdownString();
       md.supportHtml = true;
-      md.appendMarkdown(`<img src="${vscode.Uri.file(tempFile).toString()}" alt="Screenshot ${index + 1}" style="max-width: 100%; max-height: 400px;" />\n\n`);
+      md.appendMarkdown(
+        `<img src="${vscode.Uri.file(tempFile).toString()}" alt="Screenshot ${index + 1}" style="max-width: 100%; max-height: 400px;" />\n\n`,
+      );
       ctx.stream.markdown(md);
       ctx.stream.reference(vscode.Uri.file(tempFile));
 

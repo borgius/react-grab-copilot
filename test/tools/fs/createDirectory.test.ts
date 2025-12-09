@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import { createDirectoryTool } from "../../../src/tools/fs/createDirectory";
 import { createMockContext } from "../../setup";
-import * as vscode from "vscode";
 
 describe("createDirectoryTool", () => {
   const mockCtx = createMockContext();

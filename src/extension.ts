@@ -1,8 +1,8 @@
-import * as vscode from "vscode";
 import { EventEmitter } from "events";
-import { getTools } from "./tools";
+import * as vscode from "vscode";
 import { registerChatParticipant } from "./participant/participant";
 import { startServer } from "./server/server";
+import { getTools } from "./tools";
 
 const eventEmitter = new EventEmitter();
 

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as fs from "fs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listDirTool } from "../../../src/tools/fs/listDir";
 import { createMockContext } from "../../setup";
-import * as fs from "fs";
 
 vi.mock("fs", () => ({
   promises: {

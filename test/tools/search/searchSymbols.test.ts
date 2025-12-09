@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import { searchWorkspaceSymbolsTool } from "../../../src/tools/search/searchSymbols";
 import { createMockContext } from "../../setup";
-import * as vscode from "vscode";
 
 describe("searchWorkspaceSymbolsTool", () => {
   const mockCtx = createMockContext();

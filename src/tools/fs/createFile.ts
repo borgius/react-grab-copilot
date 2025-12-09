@@ -1,7 +1,7 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
 import { streamSuccess } from "../tool";
-import * as path from "path";
 import { resolvePath } from "../util/pathResolver";
 
 export const createFileTool: Tool = {

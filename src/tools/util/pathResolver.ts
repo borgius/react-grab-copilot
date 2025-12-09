@@ -26,7 +26,7 @@ export async function resolvePath(
     }
   }
 
-  let uri = vscode.Uri.file(filePath);
+  const uri = vscode.Uri.file(filePath);
 
   // Try to resolve relative paths if absolute path doesn't exist
   try {

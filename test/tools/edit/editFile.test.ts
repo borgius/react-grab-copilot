@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import { editFileTool } from "../../../src/tools/edit/editFile";
 import { createMockContext } from "../../setup";
-import * as vscode from "vscode";
 
 describe("editFileTool", () => {
   const mockCtx = createMockContext();

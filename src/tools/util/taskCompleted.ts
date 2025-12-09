@@ -1,6 +1,6 @@
+import type { EventEmitter } from "events";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
 import { streamSuccess } from "../tool";
-import type { EventEmitter } from "events";
 
 export const createGrabTaskCompletedTool = (
   eventEmitter: EventEmitter,

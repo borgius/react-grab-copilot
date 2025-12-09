@@ -235,7 +235,9 @@ export const applyPatchTool: Tool = {
 
     // Log patch to output channel
     if (ctx.outputChannel) {
-      ctx.outputChannel.appendLine(`[${new Date().toISOString()}] applyPatch received:`);
+      ctx.outputChannel.appendLine(
+        `[${new Date().toISOString()}] applyPatch received:`,
+      );
       ctx.outputChannel.appendLine(patch);
       ctx.outputChannel.appendLine("---");
     }
@@ -300,7 +302,9 @@ export const applyPatchTool: Tool = {
         );
         // Show edit message with file name and +/- counts
         const fileName = uri.fsPath.split("/").pop() || uri.fsPath;
-        ctx.stream.markdown(`📄 **${fileName}** +${addedLines} -${removedLines}\n`);
+        ctx.stream.markdown(
+          `📄 **${fileName}** +${addedLines} -${removedLines}\n`,
+        );
         results.push(`Edited: ${uri.fsPath}`);
       } catch (error) {
         failCount++;

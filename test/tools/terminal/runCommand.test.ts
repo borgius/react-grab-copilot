@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as cp from "child_process";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runTerminalCommandTool } from "../../../src/tools/terminal/runCommand";
 import { createMockContext } from "../../setup";
-import * as cp from "child_process";
 
 vi.mock("child_process", () => ({
   exec: vi.fn(),

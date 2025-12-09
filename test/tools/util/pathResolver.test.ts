@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { resolvePath } from "../../../src/tools/util/pathResolver";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
+import { resolvePath } from "../../../src/tools/util/pathResolver";
 
 describe("resolvePath", () => {
   beforeEach(() => {

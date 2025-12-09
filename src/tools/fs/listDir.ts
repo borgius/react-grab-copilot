@@ -1,6 +1,6 @@
+import * as fs from "fs";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
 import { streamResult } from "../tool";
-import * as fs from "fs";
 import { resolvePath } from "../util/pathResolver";
 
 export const listDirTool: Tool = {

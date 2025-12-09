@@ -1,7 +1,7 @@
+import * as cp from "child_process";
 import * as vscode from "vscode";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
-import { streamResult, streamInfo } from "../tool";
-import * as cp from "child_process";
+import { streamInfo, streamResult } from "../tool";
 
 export const runTerminalCommandTool: Tool = {
   definition: {

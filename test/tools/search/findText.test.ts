@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as cp from "child_process";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import { findTextTool } from "../../../src/tools/search/findText";
 import { createMockContext } from "../../setup";
-import * as cp from "child_process";
-import * as vscode from "vscode";
 
 vi.mock("child_process", () => ({
   exec: vi.fn(),

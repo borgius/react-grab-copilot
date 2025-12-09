@@ -1,8 +1,8 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
 import { streamResult } from "../tool";
-import * as fs from "fs";
-import * as path from "path";
 
 export const readProjectStructureTool: Tool = {
   definition: {

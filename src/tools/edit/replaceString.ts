@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { Tool, ToolContext, ToolOutput } from "../tool";
-import { streamSuccess, streamInfo } from "../tool";
+import { streamInfo, streamSuccess } from "../tool";
 import { resolvePath } from "../util/pathResolver";
 
 export const replaceStringTool: Tool = {
@@ -48,7 +48,7 @@ export const replaceStringTool: Tool = {
       // Try fuzzy match (ignoring whitespace differences)
       // Build a pattern that allows optional whitespace around punctuation
       let pattern = "";
-      const punctuation = /[=:,;(){}\[\]+\-*\/><"']/;
+      const punctuation = /[=:,;(){}[\]+\-*/><"']/;
 
       for (let i = 0; i < oldString.length; i++) {
         const char = oldString[i];

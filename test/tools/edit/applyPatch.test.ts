@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import { applyPatchTool } from "../../../src/tools/edit/applyPatch";
 import { createMockContext } from "../../setup";
-import * as vscode from "vscode";
 
 describe("applyPatchTool", () => {
   const mockCtx = createMockContext();

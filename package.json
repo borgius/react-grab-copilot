@@ -81,7 +81,12 @@
         "reactGrabCopilot.logLevel": {
           "type": "string",
           "default": "INFO",
-          "enum": ["DEBUG", "INFO", "WARN", "ERROR"],
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARN",
+            "ERROR"
+          ],
           "description": "Log level for the extension output. DEBUG shows detailed LLM request/response information."
         }
       }

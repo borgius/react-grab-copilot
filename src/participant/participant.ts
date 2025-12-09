@@ -1,386 +1,197 @@
-import * as vscode from "vscode";
+import type { EventEmitter } from "node:events";
 import { renderPrompt } from "@vscode/prompt-tsx";
-import type { Tool, ToolContext, ToolOutput } from "../tools/tool";
+import * as vscode from "vscode";
 import { AgentSystemPrompt } from "../prompts/prompts";
-import type { EventEmitter } from "events";
 import { requestImages } from "../server/server";
 import { createScreenshotTool } from "../tools/screenshots/getScreenshot";
+import type { Tool } from "../tools/tool";
+import { ChatHandler } from "./chatHandler";
+import { loadAgentsMdContent, loadParticipantConfig } from "./config";
+import { createLogger, type Logger } from "./logger";
+import { enrichQueryWithSourceContext } from "./sourceContext";
+
+const PARTICIPANT_ID = "react-grab-copilot.participant";
+const REQUEST_ID_PATTERN = /\[request-id:([a-zA-Z0-9-]+)\]/;
 
 /**
- * Parses source file references from the prompt.
- * Looks for patterns like:
- * Source Files:
- *   - /src/routes/index.tsx:53:15
- *   - /src/routes/index.tsx:25:11
- * 
- * Returns the first source file reference with path and line number.
+ * Extract request ID from the prompt if present
  */
-function parseSourceFileReference(prompt: string): { path: string; line: number } | null {
-  // Match "Source Files:" section with file paths like "/src/routes/index.tsx:53:15"
-  const sourceFilesMatch = prompt.match(/Source Files:\s*([\s\S]*?)(?:\n\n|$)/i);
-  if (!sourceFilesMatch) {
-    return null;
-  }
-  
-  // Extract the first file path with line number
-  // Pattern: - /path/to/file.ext:lineNumber:columnNumber (column is optional)
-  const fileMatch = sourceFilesMatch[1].match(/^\s*-\s*([^:\s]+):(\d+)(?::\d+)?/m);
-  if (!fileMatch) {
-    return null;
-  }
-  
+function extractRequestId(prompt: string): string | null {
+  const match = prompt.match(REQUEST_ID_PATTERN);
+  return match ? match[1] : null;
+}
+
+/**
+ * Get model capabilities
+ */
+function getModelCapabilities(model: vscode.LanguageModelChat): {
+  supportsVision: boolean;
+  supportsTools: boolean;
+} {
+  const capabilities = (
+    model as unknown as {
+      capabilities?: {
+        supportsImageToText?: boolean;
+        supportsToolCalling?: boolean;
+      };
+    }
+  ).capabilities;
   return {
-    path: fileMatch[1],
-    line: parseInt(fileMatch[2], 10),
+    supportsVision: capabilities?.supportsImageToText ?? false,
+    supportsTools: capabilities?.supportsToolCalling ?? true,
   };
 }
 
 /**
- * Reads source code context around a specific line from a file.
- * Returns ±contextLines lines around the specified line.
+ * Build the list of available tools, adding screenshot tool if applicable
  */
-async function getSourceContext(
-  filePath: string,
-  lineNumber: number,
-  contextLines: number = 10,
-): Promise<string | null> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders || workspaceFolders.length === 0) {
-    return null;
+function buildAvailableTools(
+  baseTools: Tool[],
+  requestId: string | null,
+  supportsVision: boolean,
+  logger: Logger,
+): Tool[] {
+  const availableTools: Tool[] = [...baseTools];
+
+  const screenshotTool = createScreenshotTool(requestId);
+  if (screenshotTool && supportsVision) {
+    availableTools.push(screenshotTool);
+    logger.info("Added get_screenshot tool for this request");
   }
-  
-  // Resolve the file path relative to workspace
-  const workspaceRoot = workspaceFolders[0].uri;
-  const fileUri = vscode.Uri.joinPath(workspaceRoot, filePath);
-  
-  try {
-    const content = await vscode.workspace.fs.readFile(fileUri);
-    const text = new TextDecoder().decode(content);
-    const lines = text.split("\n");
-    
-    // Calculate start and end lines (1-indexed to 0-indexed)
-    const startLine = Math.max(0, lineNumber - 1 - contextLines);
-    const endLine = Math.min(lines.length - 1, lineNumber - 1 + contextLines);
-    
-    // Extract the relevant lines with line numbers
-    const contextBlock = lines
-      .slice(startLine, endLine + 1)
-      .map((line, idx) => {
-        const actualLineNum = startLine + idx + 1;
-        const marker = actualLineNum === lineNumber ? ">" : " ";
-        return `${marker}${actualLineNum.toString().padStart(4)}: ${line}`;
-      })
-      .join("\n");
-    
-    return `\n\n## Source Context (${filePath}:${lineNumber}):\n\`\`\`\n${contextBlock}\n\`\`\``;
-  } catch {
-    // File not found or couldn't be read
-    return null;
+
+  return availableTools;
+}
+
+/**
+ * Warn user if images are attached but model doesn't support vision
+ */
+function warnIfImagesUnsupported(
+  requestId: string | null,
+  supportsVision: boolean,
+  modelName: string,
+  stream: vscode.ChatResponseStream,
+): void {
+  if (!requestId) return;
+
+  const images = requestImages.get(requestId);
+  if (!images || images.length === 0) return;
+
+  if (!supportsVision) {
+    stream.markdown(
+      `⚠️ *Note: The current model (${modelName}) does not support image input. Screenshots cannot be analyzed.*\n\n`,
+    );
   }
 }
 
+/**
+ * Create the chat request handler
+ */
+function createChatHandler(
+  tools: Tool[],
+  outputChannel: vscode.OutputChannel,
+  eventEmitter: EventEmitter,
+): vscode.ChatRequestHandler {
+  return async (request, _context, stream, token) => {
+    const config = loadParticipantConfig();
+    const logger = createLogger(outputChannel, config.logLevel);
+
+    logger.info(`Chat Request: ${request.prompt}`);
+
+    const requestId = extractRequestId(request.prompt);
+    const model = request.model;
+
+    if (!model) {
+      stream.markdown("No suitable model found.");
+      return;
+    }
+
+    const { supportsVision, supportsTools } = getModelCapabilities(model);
+
+    logger.info(
+      `Using model: ${model.name} (${model.id}), family: ${model.family}, vendor: ${model.vendor}, vision: ${supportsVision}, tools: ${supportsTools}`,
+    );
+
+    // Build available tools
+    const availableTools = buildAvailableTools(
+      tools,
+      requestId,
+      supportsVision,
+      logger,
+    );
+
+    // Load AGENTS.md content if enabled
+    const agentsMdContent = config.useAgentsMd
+      ? await loadAgentsMdContent()
+      : undefined;
+
+    // Enrich query with source context if present
+    const {
+      query: userQuery,
+      sourceRef,
+      contextAdded,
+    } = await enrichQueryWithSourceContext(request.prompt);
+
+    if (sourceRef) {
+      logger.info(
+        `Found source reference: ${sourceRef.path}:${sourceRef.line}`,
+      );
+      if (contextAdded) {
+        logger.info(`Added source context from ${sourceRef.path}`);
+      } else {
+        logger.warn(`Could not read source file: ${sourceRef.path}`);
+      }
+    }
+
+    // Render TSX prompt
+    const { messages } = await renderPrompt(
+      AgentSystemPrompt,
+      {
+        userQuery,
+        customSystemPrompt: config.customSystemPrompt,
+        agentsMdContent,
+        allowMcp: config.allowMcp,
+      },
+      { modelMaxPromptTokens: model.maxInputTokens },
+      model,
+    );
+
+    // Warn if images attached but model doesn't support vision
+    warnIfImagesUnsupported(requestId, supportsVision, model.name, stream);
+
+    // Create and run the chat handler
+    const chatHandler = new ChatHandler(
+      model,
+      availableTools,
+      stream,
+      eventEmitter,
+      requestId,
+      logger,
+      messages,
+    );
+
+    try {
+      await chatHandler.run(token);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      stream.markdown(`\n\n**Error:** Error in chat loop: ${errorMessage}`);
+      logger.error("Error in chat loop", err);
+    }
+  };
+}
+
+/**
+ * Register the chat participant with VS Code
+ */
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
   tools: Tool[],
   outputChannel: vscode.OutputChannel,
   eventEmitter: EventEmitter,
-) {
+): void {
+  const handler = createChatHandler(tools, outputChannel, eventEmitter);
   const participant = vscode.chat.createChatParticipant(
-    "react-grab-copilot.participant",
-    async (request, _context, stream, token) => {
-      outputChannel.appendLine(
-        `[${new Date().toISOString()}] Chat Request: ${request.prompt}`,
-      );
-
-      const match = request.prompt.match(/\[request-id:([a-zA-Z0-9-]+)\]/);
-      const requestId = match ? match[1] : null;
-
-      // Use the model selected by the user in GitHub Copilot chat
-      const model = request.model;
-      if (!model) {
-        stream.markdown("No suitable model found.");
-        return;
-      }
-      
-      // Check model capabilities
-      const modelCapabilities = (model as any).capabilities;
-      const supportsVision = modelCapabilities?.supportsImageToText ?? false;
-      const supportsTools = modelCapabilities?.supportsToolCalling ?? true;
-      
-      outputChannel.appendLine(
-        `[${new Date().toISOString()}] Using model: ${model.name} (${model.id}), family: ${model.family}, vendor: ${model.vendor}, vision: ${supportsVision}, tools: ${supportsTools}`,
-      );
-
-      // Build the list of available tools
-      const availableTools: Tool[] = [...tools];
-      
-      // Add screenshot tool if this request has images AND model supports vision
-      const screenshotTool = createScreenshotTool(requestId);
-      if (screenshotTool && supportsVision) {
-        availableTools.push(screenshotTool);
-        outputChannel.appendLine(
-          `[${new Date().toISOString()}] Added get_screenshot tool for this request`,
-        );
-      }
-      
-      const toolDefinitions = availableTools.map((t) => t.definition);
-
-      // Get custom system prompt from config
-      const config = vscode.workspace.getConfiguration("reactGrabCopilot");
-      const customSystemPrompt = config.get<string>("systemPrompt");
-      const useAgentsMd = config.get<boolean>("useAgentsMd", true);
-      const allowMcp = config.get<boolean>("allowMcp", false);
-      const logLevel = config.get<string>("logLevel", "INFO");
-      const isDebug = logLevel === "DEBUG";
-
-      // Read AGENTS.md if enabled
-      let agentsMdContent: string | undefined;
-      if (useAgentsMd) {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-          const agentsMdUri = vscode.Uri.joinPath(workspaceFolders[0].uri, "AGENTS.md");
-          try {
-            const content = await vscode.workspace.fs.readFile(agentsMdUri);
-            agentsMdContent = new TextDecoder().decode(content);
-          } catch {
-            // AGENTS.md doesn't exist, ignore
-          }
-        }
-      }
-
-      // Parse source file references from the prompt and get context
-      let userQuery = request.prompt;
-      const sourceRef = parseSourceFileReference(request.prompt);
-      if (sourceRef) {
-        outputChannel.appendLine(
-          `[${new Date().toISOString()}] Found source reference: ${sourceRef.path}:${sourceRef.line}`,
-        );
-        const sourceContext = await getSourceContext(sourceRef.path, sourceRef.line, 10);
-        if (sourceContext) {
-          userQuery = request.prompt + sourceContext;
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Added source context from ${sourceRef.path}`,
-          );
-          if (isDebug) {
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] Source Context:\n${sourceContext}`,
-            );
-          }
-        } else {
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Could not read source file: ${sourceRef.path}`,
-          );
-        }
-      }
-
-      // Render TSX prompt
-      const { messages } = await renderPrompt(
-        AgentSystemPrompt,
-        { userQuery, customSystemPrompt, agentsMdContent, allowMcp },
-        { modelMaxPromptTokens: model.maxInputTokens },
-        model,
-      );
-
-      // If this request has images, log them (display happens when tool is called)
-      if (requestId) {
-        const images = requestImages.get(requestId);
-        if (images && images.length > 0) {
-          // Log received image types for debugging
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Received ${images.length} image(s) with types: ${images.map(img => img.type).join(', ')}`,
-          );
-          
-          // If model supports vision, inform the model about the screenshot tool
-          if (supportsVision) {
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] Model supports vision - get_screenshot tool available for ${images.length} image(s)`,
-            );
-          } else {
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] Model ${model.name} does not support vision - screenshots cannot be analyzed`,
-            );
-            stream.markdown(`⚠️ *Note: The current model (${model.name}) does not support image input. Screenshots cannot be analyzed.*\n\n`);
-          }
-        }
-      }
-
-      // Create tool context for streaming
-      const toolCtx: ToolContext = { stream, eventEmitter, requestId, outputChannel };
-
-      // Check if any message contains images to set vision request header
-      const hasImages = messages.some(msg => 
-        msg.content.some((part: unknown) => part instanceof vscode.LanguageModelDataPart)
-      );
-
-      try {
-        while (!token.isCancellationRequested) {
-          const requestOptions: vscode.LanguageModelChatRequestOptions = {
-            tools: toolDefinitions,
-            // Add vision header when images are present
-            ...(hasImages && { modelOptions: { 'Copilot-Vision-Request': 'true' } }),
-          };
-          
-          // Log full request to LLM (only at DEBUG level)
-          if (isDebug) {
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] === LLM Request ===`,
-            );
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] Model: ${model.name} (${model.id})`,
-            );
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] Request Options: ${JSON.stringify(requestOptions, null, 2)}`,
-            );
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] Messages (${messages.length}):`,
-            );
-            for (let i = 0; i < messages.length; i++) {
-              const msg = messages[i];
-              const role = msg.role === vscode.LanguageModelChatMessageRole.User ? 'User' : 'Assistant';
-              const contentPreview = msg.content.map((part: unknown) => {
-                if (part instanceof vscode.LanguageModelTextPart) {
-                  return `Text(${part.value.length} chars): ${part.value.substring(0, 500)}${part.value.length > 500 ? '...' : ''}`;
-                } else if (part instanceof vscode.LanguageModelToolCallPart) {
-                  return `ToolCall: ${part.name}(${JSON.stringify(part.input)})`;
-                } else if (part instanceof vscode.LanguageModelToolResultPart) {
-                  return `ToolResult: callId=${part.callId}`;
-                } else if (part instanceof vscode.LanguageModelDataPart) {
-                  return `DataPart: image`;
-                }
-                return `Unknown: ${typeof part}`;
-              }).join(', ');
-              outputChannel.appendLine(
-                `[${new Date().toISOString()}]   [${i}] ${role}: ${contentPreview}`,
-              );
-            }
-            outputChannel.appendLine(
-              `[${new Date().toISOString()}] === End LLM Request ===`,
-            );
-          }
-          
-          const chatRequest = await model.sendRequest(
-            messages,
-            requestOptions,
-            token,
-          );
-
-          const responseParts: (
-            | vscode.LanguageModelTextPart
-            | vscode.LanguageModelToolCallPart
-          )[] = [];
-          const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-          let hasShownThinking = false;
-
-          for await (const fragment of chatRequest.stream) {
-            if (fragment instanceof vscode.LanguageModelTextPart) {
-              // Show thinking/reasoning from the model
-              if (!hasShownThinking && fragment.value.trim()) {
-                // stream.markdown(`💭 **Thinking:**\n`);
-                hasShownThinking = true;
-              }
-              stream.markdown(fragment.value);
-              // Emit thinking event for SSE clients
-              if (requestId && fragment.value.trim()) {
-                eventEmitter.emit(`${requestId}:status`, { thinking: fragment.value });
-              }
-              responseParts.push(fragment);
-            } else if (fragment instanceof vscode.LanguageModelToolCallPart) {
-              toolCalls.push(fragment);
-              responseParts.push(fragment);
-            }
-          }
-
-          // Add spacing after thinking if there were tool calls
-          if (hasShownThinking && toolCalls.length > 0) {
-            stream.markdown(`\n`);
-          }
-
-          // Correctly construct the Assistant message with all parts
-          messages.push(
-            vscode.LanguageModelChatMessage.Assistant(responseParts),
-          );
-
-          if (toolCalls.length === 0) {
-            break;
-          }
-
-          const toolResults: vscode.LanguageModelToolResultPart[] = [];
-          for (const toolCall of toolCalls) {
-            stream.markdown(`\n🔧 Using **${toolCall.name}**\n`);
-            // Emit status event for SSE clients
-            if (requestId) {
-              eventEmitter.emit(`${requestId}:status`, { tool: toolCall.name, input: toolCall.input });
-            }
-            // stream.markdown(
-            //   `\`\`\`json\n${JSON.stringify(toolCall.input, null, 2)}\n\`\`\`\n`,
-            // );
-
-            const tool = availableTools.find((t) => t.definition.name === toolCall.name);
-            let result: ToolOutput = { text: "Tool not found" };
-            if (tool) {
-              try {
-                // Tool handles its own streaming output
-                result = await tool.execute(toolCall.input, toolCtx);
-                // Ensure result is valid
-                if (!result || !result.text) {
-                  result = { text: "Tool returned no result" };
-                }
-                outputChannel.appendLine(
-                  `[${new Date().toISOString()}] Tool ${toolCall.name} result length: ${result.text.length}`,
-                );
-              } catch (err: unknown) {
-                const errorMessage =
-                  err instanceof Error ? err.message : String(err);
-                result = { text: `Error executing tool: ${errorMessage}` };
-                stream.markdown(`❌ **Error:** ${errorMessage}\n`);
-                outputChannel.appendLine(
-                  `[${new Date().toISOString()}] Tool Error: ${errorMessage}`,
-                );
-              }
-            } else {
-              stream.markdown(`❌ **Error:** Tool not found\n`);
-            }
-
-            stream.markdown(`\n`);
-
-            // Build tool result content - include image if returned
-            const resultContent: (vscode.LanguageModelTextPart | vscode.LanguageModelDataPart)[] = [
-              new vscode.LanguageModelTextPart(result.text),
-            ];
-            
-            // If the tool returned an image, add it to the result
-            if (result.image && supportsVision) {
-              const imageData = Buffer.from(result.image.data, 'base64');
-              resultContent.push(vscode.LanguageModelDataPart.image(imageData, result.image.mimeType));
-              outputChannel.appendLine(
-                `[${new Date().toISOString()}] Including image in tool result: ${result.image.description || 'screenshot'}`,
-              );
-            }
-
-            // Create proper LanguageModelToolResultPart with the content
-            toolResults.push(
-              new vscode.LanguageModelToolResultPart(toolCall.callId, resultContent),
-            );
-          }
-
-          messages.push(vscode.LanguageModelChatMessage.User(toolResults));
-        }
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        stream.markdown(`\n\n**Error:** Error in chat loop: ${errorMessage}`);
-        outputChannel.appendLine(
-          `[${new Date().toISOString()}] Error in chat loop: ${errorMessage}`,
-        );
-      } finally {
-        // Signal completion to the server if this was an API request
-        if (requestId) {
-          eventEmitter.emit(requestId, "done");
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Emitted completion for request: ${requestId}`,
-          );
-        }
-      }
-    },
+    PARTICIPANT_ID,
+    handler,
   );
   context.subscriptions.push(participant);
 }

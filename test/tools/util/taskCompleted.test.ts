@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { EventEmitter } from "events";
+import { describe, expect, it, vi } from "vitest";
 import { createGrabTaskCompletedTool } from "../../../src/tools/util/taskCompleted";
 import { createMockContext } from "../../setup";
-import { EventEmitter } from "events";
 
 describe("createGrabTaskCompletedTool", () => {
   const mockCtx = createMockContext();

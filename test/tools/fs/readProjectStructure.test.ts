@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as fs from "fs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import { readProjectStructureTool } from "../../../src/tools/fs/readProjectStructure";
 import { createMockContext } from "../../setup";
-import * as fs from "fs";
-import * as vscode from "vscode";
 
 vi.mock("fs", () => ({
   promises: {
