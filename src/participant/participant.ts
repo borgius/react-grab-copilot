@@ -96,8 +96,7 @@ export function registerChatParticipant(
       const requestId = match ? match[1] : null;
 
       // Use the model selected by the user in GitHub Copilot chat
-      const models = await vscode.lm.selectChatModels();
-      const model = models[0];
+      const model = request.model;
       if (!model) {
         stream.markdown("No suitable model found.");
         return;
