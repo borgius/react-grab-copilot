@@ -25,6 +25,7 @@ export class ChatHandler {
   private readonly messages: vscode.LanguageModelChatMessage[];
   private readonly toolContext: ToolContext;
   private readonly modelCapabilities: ModelCapabilities;
+  private thinkingBuffer = "";
 
   constructor(
     private readonly model: vscode.LanguageModelChat,
@@ -163,6 +164,9 @@ export class ChatHandler {
       }
     }
 
+    // Flush buffered thinking content to SSE clients
+    this.flushThinkingBuffer();
+
     // Add spacing after thinking if there were tool calls
     if (hasShownThinking && toolCalls.length > 0) {
       this.stream.markdown("\n");
@@ -184,14 +188,24 @@ export class ChatHandler {
 
     this.stream.markdown(fragment.value);
 
-    // Emit thinking event for SSE clients
-    if (this.requestId && fragment.value.trim()) {
-      this.eventEmitter.emit(`${this.requestId}:status`, {
-        thinking: fragment.value,
-      });
+    // Buffer text for SSE clients - will be flushed at end of stream
+    if (this.requestId) {
+      this.thinkingBuffer += fragment.value;
     }
 
     return hasShownThinking;
+  }
+
+  /**
+   * Flush buffered thinking content to SSE clients
+   */
+  private flushThinkingBuffer(): void {
+    if (this.requestId && this.thinkingBuffer.trim()) {
+      this.eventEmitter.emit(`${this.requestId}:status`, {
+        thinking: this.thinkingBuffer.trim(),
+      });
+    }
+    this.thinkingBuffer = "";
   }
 
   /**
