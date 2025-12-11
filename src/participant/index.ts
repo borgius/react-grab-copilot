@@ -12,6 +12,8 @@ export {
   buildEnrichedQuery,
   type EnrichedQuery,
   type EnrichQueryOptions,
+  type ScreenshotDescription,
+  type ScreenshotInfo,
 } from "./queryBuilder";
 export {
   enrichQueryWithSourceContext,

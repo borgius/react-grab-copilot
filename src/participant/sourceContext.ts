@@ -23,24 +23,25 @@ const DEFAULT_CONTEXT_LINES = 10;
  *   - /src/routes/index.tsx:25:11
  * ```
  *
- * @param prompt - The user prompt to parse
+ * @param text - The text to parse (prompt or content)
  * @returns The first source file reference found, or null if none found
  */
 export function parseSourceFileReference(
-  prompt: string,
+  text: string,
 ): SourceFileReference | null {
-  // Match "Source Files:" section with file paths
-  const sourceFilesMatch = prompt.match(
-    /Source Files:\s*([\s\S]*?)(?:\n\n|$)/i,
+  // Match "Source Files" section (with or without "via data-tsd-source" etc.)
+  const sourceFilesMatch = text.match(
+    /Source Files[^:]*:\s*([\s\S]*?)(?:\n\n|$)/i,
   );
   if (!sourceFilesMatch) {
     return null;
   }
 
   // Extract the first file path with line number
-  // Pattern: - /path/to/file.ext:lineNumber:columnNumber (column is optional)
+  // Pattern: - path/to/file.ext:lineNumber:columnNumber (column is optional)
+  // The path can contain slashes, dots, hyphens, underscores
   const fileMatch = sourceFilesMatch[1].match(
-    /^\s*-\s*([^:\s]+):(\d+)(?::\d+)?/m,
+    /^\s*-\s*([\w.\-/]+):(\d+)(?::\d+)?/m,
   );
   if (!fileMatch) {
     return null;
@@ -112,14 +113,22 @@ function formatSourceContext(
  * Enrich a user query with source context if source file references are found
  *
  * @param prompt - The original user prompt
+ * @param content - Optional content that may contain source file references
  * @returns Object containing the enriched query and whether context was added
  */
-export async function enrichQueryWithSourceContext(prompt: string): Promise<{
+export async function enrichQueryWithSourceContext(
+  prompt: string,
+  content?: string,
+): Promise<{
   query: string;
   sourceRef: SourceFileReference | null;
   contextAdded: boolean;
 }> {
-  const sourceRef = parseSourceFileReference(prompt);
+  // Search for source file references in both prompt and content
+  let sourceRef = parseSourceFileReference(prompt);
+  if (!sourceRef && content) {
+    sourceRef = parseSourceFileReference(content);
+  }
 
   if (!sourceRef) {
     return { query: prompt, sourceRef: null, contextAdded: false };

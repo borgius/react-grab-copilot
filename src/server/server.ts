@@ -56,6 +56,58 @@ export function startServer(
     return c.json({ status: "ok" });
   });
 
+  // Screenshot endpoint - get screenshots by requestId
+  app.get("/screenshot/:requestId", (c) => {
+    const { requestId } = c.req.param();
+    const images = requestImages.get(requestId);
+
+    if (!images || images.length === 0) {
+      return c.json({ error: "No screenshots found for this request" }, 404);
+    }
+
+    // Return metadata about available screenshots
+    return c.json({
+      requestId,
+      count: images.length,
+      screenshots: images.map((img, index) => ({
+        index,
+        type: img.type,
+        description: img.description,
+        // Include base64 data for each image
+        data: img.data,
+      })),
+    });
+  });
+
+  // Screenshot endpoint - get specific screenshot by index
+  app.get("/screenshot/:requestId/:index", (c) => {
+    const { requestId, index } = c.req.param();
+    const images = requestImages.get(requestId);
+
+    if (!images || images.length === 0) {
+      return c.json({ error: "No screenshots found for this request" }, 404);
+    }
+
+    const idx = Number.parseInt(index, 10);
+    if (Number.isNaN(idx) || idx < 0 || idx >= images.length) {
+      return c.json(
+        { error: `Invalid index. Available: 0-${images.length - 1}` },
+        400,
+      );
+    }
+
+    const image = images[idx];
+
+    // Return the image as binary with proper content type
+    const imageBuffer = Buffer.from(image.data, "base64");
+    return new Response(imageBuffer, {
+      headers: {
+        "Content-Type": image.type,
+        "Content-Disposition": `inline; filename="screenshot-${idx}.png"`,
+      },
+    });
+  });
+
   // Models endpoint - list available Copilot models and capabilities
   app.get("/models", async (c) => {
     try {
@@ -237,13 +289,32 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
     // Handle direct message mode (fire-and-forget)
     // Sends to VS Code chat window without @react-grab participant
     if (directMessage) {
+      // Store images for the screenshot endpoint to serve
+      if (images && Array.isArray(images) && images.length > 0) {
+        requestImages.set(requestId, images as ImageData[]);
+      }
+
       return streamSSE(c, async (stream) => {
         try {
+          // Build screenshot info with descriptions
+          const screenshotInfo =
+            images && images.length > 0
+              ? {
+                  requestId,
+                  port,
+                  screenshots: images.map((img, index) => ({
+                    index,
+                    description: img.description,
+                  })),
+                }
+              : undefined;
+
           // Build enriched query with default system prompt + request system prompt + source context
           const { query: enrichedQuery } = await buildEnrichedQuery({
             prompt,
             content,
             requestSystemPrompt: systemPrompt,
+            screenshotInfo,
           });
 
           // Open chat panel (background flag controls focus behavior)
