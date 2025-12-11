@@ -95,13 +95,28 @@ Request body:
   "prompt": "Your prompt here",
   "content": "Optional content context",
   "systemPrompt": "Optional custom system prompt to guide the assistant",
+  "directMessage": false,
+  "background": true,
   "options": {
     "model": "gpt-4o"
   }
 }
 ```
 
+**Options:**
+- `directMessage` (boolean): When `true`, bypasses the `@react-grab` participant and sends directly to the LM API. Uses fire-and-forget pattern - responds immediately with status and done events.
+- `background` (boolean): When `true` (default), runs silently. When `false`, opens VS Code chat panel. Only applies when `directMessage=true`.
+
 Response: Server-Sent Events (SSE) stream
+
+For direct message mode, response is:
+```
+event: status
+data: started direct message <requestId>
+
+event: done
+data:
+```
 
 **GET** `http://localhost:6567/models`
 

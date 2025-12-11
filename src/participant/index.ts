@@ -9,6 +9,11 @@ export {
 export { createLogger, Logger, type LogLevel } from "./logger";
 export { registerChatParticipant } from "./participant";
 export {
+  buildEnrichedQuery,
+  type EnrichedQuery,
+  type EnrichQueryOptions,
+} from "./queryBuilder";
+export {
   enrichQueryWithSourceContext,
   getSourceContext,
   parseSourceFileReference,

@@ -72,7 +72,7 @@ Call this tool with the index of the screenshot you want to view. The image will
       const img = currentImages[index];
       const description = img.description || `Screenshot ${index + 1}`;
 
-      ctx.outputChannel.appendLine(
+      ctx.outputChannel?.appendLine(
         `[${new Date().toISOString()}] get_screenshot tool called for index ${index}: ${description}`,
       );
 

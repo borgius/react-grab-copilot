@@ -32,6 +32,38 @@ Send a POST request to `http://localhost:6567/agent` with JSON body:
 
 The response will be an SSE stream.
 
+#### Direct Message Mode
+
+Set `directMessage: true` to bypass the `@react-grab` participant and send messages directly to the language model. This uses a fire-and-forget pattern - the server responds immediately with status and done events, and the agent continues working in the background.
+
+```json
+{
+  "prompt": "Refactor this code",
+  "content": "const x = 1;",
+  "systemPrompt": "You are a TypeScript expert.",
+  "directMessage": true,
+  "background": true,
+  "options": {
+    "model": "gpt-4o"
+  }
+}
+```
+
+**Options:**
+- `directMessage`: When `true`, sends directly to the LM API without using the `@react-grab` chat participant. Includes all system prompts, source context, and tools.
+- `background`: When `true` (default), runs silently without opening the VS Code chat panel. When `false`, opens the chat panel to show progress.
+
+**Response for direct mode:**
+```
+event: status
+data: started direct message <requestId>
+
+event: done
+data:
+```
+
+The agent will continue working asynchronously. All system prompts, AGENTS.md content, source context enrichment, and tools are available in direct mode.
+
 ### `/models` Endpoint
 
 Get available Copilot models and their capabilities:

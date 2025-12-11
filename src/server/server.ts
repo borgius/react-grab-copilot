@@ -5,11 +5,29 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import * as vscode from "vscode";
+import { buildEnrichedQuery } from "../participant/queryBuilder";
 
 export interface ImageData {
   type: string;
   data: string;
   description?: string;
+}
+
+/**
+ * Request body for the /agent endpoint
+ */
+export interface AgentRequestBody {
+  prompt: string;
+  content?: string;
+  images?: ImageData[];
+  systemPrompt?: string;
+  options?: {
+    model?: string;
+  };
+  /** Send directly to LM API without @react-grab participant (fire-and-forget) */
+  directMessage?: boolean;
+  /** If true, run silently without opening chat panel (only applies to directMessage=true) */
+  background?: boolean;
 }
 
 // Shared store for images, keyed by requestId
@@ -82,7 +100,12 @@ export function startServer(
 
   // Prompt improvement endpoint
   app.post("/prompt", async (c) => {
-    let body: { prompt?: string; content?: string; systemPrompt?: string; options?: { model?: string } };
+    let body: {
+      prompt?: string;
+      content?: string;
+      systemPrompt?: string;
+      options?: { model?: string };
+    };
     try {
       body = await c.req.json();
     } catch (_e) {
@@ -110,7 +133,9 @@ export function startServer(
 
       // Build the analysis prompt
       const contextInfo = content ? `\n\nContext:\n${content}` : "";
-      const systemPromptInfo = systemPrompt ? `\n\nSystem prompt guidelines:\n${systemPrompt}` : "";
+      const systemPromptInfo = systemPrompt
+        ? `\n\nSystem prompt guidelines:\n${systemPrompt}`
+        : "";
       const analysisPrompt = `You are an expert prompt engineer specialized in software development. Analyze the following user prompt and context, then generate 3 improved variants that:
 1. Are more specific and actionable
 2. Include relevant technical details from the context
@@ -128,11 +153,13 @@ Return ONLY a JSON array with 3 prompt variants. Each variant should be a comple
 
 IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
 
-      const messages = [
-        vscode.LanguageModelChatMessage.User(analysisPrompt),
-      ];
+      const messages = [vscode.LanguageModelChatMessage.User(analysisPrompt)];
 
-      const chatRequest = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
+      const chatRequest = await model.sendRequest(
+        messages,
+        {},
+        new vscode.CancellationTokenSource().token,
+      );
 
       let responseText = "";
       for await (const fragment of chatRequest.text) {
@@ -180,14 +207,22 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
   let requestQueue = Promise.resolve();
 
   app.post("/agent", async (c) => {
-    let body: any;
+    let body: AgentRequestBody;
     try {
       body = await c.req.json();
     } catch (e) {
       return c.json({ error: "Invalid JSON" }, 400);
     }
 
-    const { prompt, content, images, systemPrompt, options: _options } = body;
+    const {
+      prompt,
+      content,
+      images,
+      systemPrompt,
+      options,
+      directMessage,
+      background,
+    } = body;
 
     if (!prompt) {
       return c.json({ error: "Prompt is required" }, 400);
@@ -195,6 +230,41 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
 
     const requestId = crypto.randomUUID();
 
+    outputChannel.appendLine(
+      `[${new Date().toISOString()}] ${directMessage ? "Direct" : "Participant"} Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
+    );
+
+    // Handle direct message mode (fire-and-forget)
+    // Sends to VS Code chat window without @react-grab participant
+    if (directMessage) {
+      return streamSSE(c, async (stream) => {
+        try {
+          // Build enriched query with default system prompt + request system prompt + source context
+          const { query: enrichedQuery } = await buildEnrichedQuery({
+            prompt,
+            content,
+            requestSystemPrompt: systemPrompt,
+          });
+
+          // Open chat panel (background flag controls focus behavior)
+          await vscode.commands.executeCommand("workbench.action.chat.open", {
+            query: enrichedQuery,
+          });
+
+          // Fire and forget - emit status then done and close connection
+          await stream.writeSSE({
+            event: "status",
+            data: `started direct message ${requestId}`,
+          });
+          await stream.writeSSE({ event: "done", data: "" });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          await stream.writeSSE({ event: "error", data: msg });
+        }
+      });
+    }
+
+    // Standard @react-grab participant flow
     // Store images for the participant to retrieve
     if (images && Array.isArray(images)) {
       requestImages.set(requestId, images as ImageData[]);
@@ -213,7 +283,7 @@ ${content}
 [request-id:${requestId}]`;
 
     outputChannel.appendLine(
-      `[${new Date().toISOString()}] Queued Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
+      `[${new Date().toISOString()}] Queued Participant Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
     );
 
     return streamSSE(c, async (stream) => {
