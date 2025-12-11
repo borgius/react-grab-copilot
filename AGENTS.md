@@ -94,6 +94,7 @@ Request body:
 {
   "prompt": "Your prompt here",
   "content": "Optional content context",
+  "systemPrompt": "Optional custom system prompt to guide the assistant",
   "options": {
     "model": "gpt-4o"
   }
@@ -101,3 +102,54 @@ Request body:
 ```
 
 Response: Server-Sent Events (SSE) stream
+
+**GET** `http://localhost:6567/models`
+
+Returns available Copilot models and their capabilities.
+
+Response:
+```json
+{
+  "models": [
+    {
+      "id": "gpt-4o",
+      "name": "GPT-4o",
+      "vendor": "copilot",
+      "family": "gpt-4o",
+      "version": "2024-05-13",
+      "maxInputTokens": 128000,
+      "capabilities": {
+        "supportsVision": true,
+        "supportsTools": true
+      }
+    }
+  ]
+}
+```
+
+**POST** `http://localhost:6567/prompt`
+
+Analyzes a user prompt and returns 3 improved variants optimized for the project context.
+
+Request body:
+```json
+{
+  "prompt": "Your prompt here",
+  "content": "Optional content context",
+  "systemPrompt": "Optional custom system prompt to guide prompt improvement",
+  "options": {
+    "model": "gpt-4o"
+  }
+}
+```
+
+Response:
+```json
+{
+  "variants": [
+    "First improved prompt variant",
+    "Second improved prompt variant",
+    "Third improved prompt variant"
+  ]
+}
+```

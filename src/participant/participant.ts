@@ -2,7 +2,7 @@ import type { EventEmitter } from "node:events";
 import { renderPrompt } from "@vscode/prompt-tsx";
 import * as vscode from "vscode";
 import { AgentSystemPrompt } from "../prompts/prompts";
-import { requestImages } from "../server/server";
+import { requestImages, requestSystemPrompts } from "../server/server";
 import { createScreenshotTool } from "../tools/screenshots/getScreenshot";
 import type { Tool } from "../tools/tool";
 import { ChatHandler } from "./chatHandler";
@@ -124,6 +124,11 @@ function createChatHandler(
       ? await loadAgentsMdContent()
       : undefined;
 
+    // Get custom system prompt: prefer request-specific, fallback to config
+    const customSystemPrompt = requestId
+      ? requestSystemPrompts.get(requestId) || config.customSystemPrompt
+      : config.customSystemPrompt;
+
     // Enrich query with source context if present
     const {
       query: userQuery,
@@ -147,7 +152,7 @@ function createChatHandler(
       AgentSystemPrompt,
       {
         userQuery,
-        customSystemPrompt: config.customSystemPrompt,
+        customSystemPrompt,
         agentsMdContent,
         allowMcp: config.allowMcp,
       },
