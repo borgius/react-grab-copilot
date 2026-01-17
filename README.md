@@ -12,6 +12,11 @@ VS Code extension that exposes GitHub Copilot as an agent server.
 ## Configuration
 
 - `reactGrabCopilot.port`: Port to listen on (default: 6567).
+- `reactGrabCopilot.systemPrompt`: Custom system prompt for the agent (default: empty).
+- `reactGrabCopilot.useAgentsMd`: Include AGENTS.md from workspace root in the system prompt context (default: true).
+- `reactGrabCopilot.allowMcp`: Allow the agent to use MCP servers configured in VS Code (default: false).
+- `reactGrabCopilot.sendScreenshotToLLM`: Send screenshots to the LLM for visual context (default: true).
+- `reactGrabCopilot.logLevel`: Log level for the extension output (default: INFO).
 
 ## Usage
 

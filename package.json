@@ -2,13 +2,21 @@
   "name": "react-grab-copilot",
   "displayName": "React Grab Copilot",
   "description": "VS Code extension to expose Copilot as an agent server",
-  "version": "0.0.1",
-  "publisher": "react-grab",
+  "version": "0.0.2",
+  "publisher": "borgius",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/borgius/react-grab-copilot.git"
   },
+  "files": [
+    "dist/**",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "package.json",
+    "examples/**"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
