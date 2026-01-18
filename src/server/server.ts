@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import * as vscode from "vscode";
+import type { Logger } from "../participant/logger";
 import { buildEnrichedQuery } from "../participant/queryBuilder";
 
 export interface ImageData {
@@ -41,9 +42,12 @@ export function startServer(
   eventEmitter: EventEmitter,
   outputChannel: vscode.OutputChannel,
   statusBarItem: vscode.StatusBarItem,
+  logger: Logger,
 ): any {
   const config = vscode.workspace.getConfiguration("reactGrabCopilot");
   const port = config.get<number>("port", 6567);
+
+  logger.info(`Initializing HTTP server on port ${port}`);
 
   statusBarItem.text = `$(radio-tower) Copilot Agent: ${port}`;
   statusBarItem.show();
@@ -53,18 +57,24 @@ export function startServer(
 
   // Health check endpoint
   app.get("/health", (c) => {
+    logger.debug("Health check requested");
     return c.json({ status: "ok" });
   });
 
   // Screenshot endpoint - get screenshots by requestId
   app.get("/screenshot/:requestId", (c) => {
     const { requestId } = c.req.param();
+    logger.debug(`Screenshot requested for request ID: ${requestId}`);
     const images = requestImages.get(requestId);
 
     if (!images || images.length === 0) {
+      logger.warn(`No screenshots found for request ID: ${requestId}`);
       return c.json({ error: "No screenshots found for this request" }, 404);
     }
 
+    logger.debug(
+      `Returning ${images.length} screenshots for request ID: ${requestId}`,
+    );
     // Return metadata about available screenshots
     return c.json({
       requestId,
@@ -82,14 +92,19 @@ export function startServer(
   // Screenshot endpoint - get specific screenshot by index
   app.get("/screenshot/:requestId/:index", (c) => {
     const { requestId, index } = c.req.param();
+    logger.debug(`Screenshot ${index} requested for request ID: ${requestId}`);
     const images = requestImages.get(requestId);
 
     if (!images || images.length === 0) {
+      logger.warn(`No screenshots found for request ID: ${requestId}`);
       return c.json({ error: "No screenshots found for this request" }, 404);
     }
 
     const idx = Number.parseInt(index, 10);
     if (Number.isNaN(idx) || idx < 0 || idx >= images.length) {
+      logger.warn(
+        `Invalid screenshot index ${index} for request ID: ${requestId}`,
+      );
       return c.json(
         { error: `Invalid index. Available: 0-${images.length - 1}` },
         400,
@@ -97,6 +112,7 @@ export function startServer(
     }
 
     const image = images[idx];
+    logger.debug(`Returning screenshot ${idx} for request ID: ${requestId}`);
 
     // Return the image as binary with proper content type
     const imageBuffer = Buffer.from(image.data, "base64");
@@ -110,9 +126,11 @@ export function startServer(
 
   // Models endpoint - list available Copilot models and capabilities
   app.get("/models", async (c) => {
+    logger.debug("Models list requested");
     try {
       // Get all available Copilot models
       const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+      logger.info(`Found ${models.length} Copilot models`);
 
       const modelList = models.map((model) => {
         // Extract capabilities from the model
@@ -141,17 +159,15 @@ export function startServer(
 
       return c.json({ models: modelList });
     } catch (err: unknown) {
-      console.error("Error fetching models:", err);
+      logger.error("Failed to fetch models", err);
       const msg = err instanceof Error ? err.message : "Unknown error";
-      outputChannel.appendLine(
-        `[${new Date().toISOString()}] Error in /models endpoint: ${msg}`,
-      );
       return c.json({ error: msg }, 500);
     }
   });
 
   // Prompt improvement endpoint
   app.post("/prompt", async (c) => {
+    logger.debug("Prompt improvement requested");
     let body: {
       prompt?: string;
       content?: string;
@@ -161,14 +177,20 @@ export function startServer(
     try {
       body = await c.req.json();
     } catch (_e) {
+      logger.warn("Invalid JSON in /prompt request");
       return c.json({ error: "Invalid JSON" }, 400);
     }
 
     const { prompt, content, systemPrompt, options } = body;
 
     if (!prompt) {
+      logger.warn("Prompt improvement request missing prompt");
       return c.json({ error: "Prompt is required" }, 400);
     }
+
+    logger.info(
+      `Generating prompt variants for: ${prompt.substring(0, 50)}${prompt.length > 50 ? "..." : ""}`,
+    );
 
     try {
       // Select the language model
@@ -180,8 +202,11 @@ export function startServer(
       const [model] = await vscode.lm.selectChatModels(modelSelector);
 
       if (!model) {
+        logger.error("No suitable model found for prompt improvement");
         return c.json({ error: "No suitable model found" }, 500);
       }
+
+      logger.debug(`Using model: ${model.name} (${model.id})`);
 
       // Build the analysis prompt
       const contextInfo = content ? `\n\nContext:\n${content}` : "";
@@ -232,9 +257,11 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
         if (!Array.isArray(variants) || variants.length !== 3) {
           throw new Error("Expected array of 3 variants");
         }
+
+        logger.info("Successfully generated 3 prompt variants");
       } catch (_parseErr) {
-        outputChannel.appendLine(
-          `[${new Date().toISOString()}] Failed to parse prompt variants: ${responseText}`,
+        logger.warn(
+          `Failed to parse prompt variants, using fallback. Response: ${responseText.substring(0, 100)}`,
         );
         // Fallback: return original prompt with slight variations
         variants = [
@@ -246,11 +273,8 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
 
       return c.json({ variants });
     } catch (err: unknown) {
-      console.error("Error generating prompt variants:", err);
+      logger.error("Failed to generate prompt variants", err);
       const msg = err instanceof Error ? err.message : "Unknown error";
-      outputChannel.appendLine(
-        `[${new Date().toISOString()}] Error in /prompt endpoint: ${msg}`,
-      );
       return c.json({ error: msg }, 500);
     }
   });
@@ -259,10 +283,12 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
   let requestQueue = Promise.resolve();
 
   app.post("/agent", async (c) => {
+    logger.debug("Agent request received");
     let body: AgentRequestBody;
     try {
       body = await c.req.json();
     } catch (e) {
+      logger.warn("Invalid JSON in /agent request");
       return c.json({ error: "Invalid JSON" }, 400);
     }
 
@@ -277,21 +303,33 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
     } = body;
 
     if (!prompt) {
+      logger.warn("Agent request missing prompt");
       return c.json({ error: "Prompt is required" }, 400);
     }
 
     const requestId = crypto.randomUUID();
+    const promptPreview = `${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`;
 
-    outputChannel.appendLine(
-      `[${new Date().toISOString()}] ${directMessage ? "Direct" : "Participant"} Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
+    logger.info(
+      `${directMessage ? "Direct" : "Participant"} request ${requestId}: ${promptPreview}`,
     );
+    if (images && Array.isArray(images) && images.length > 0) {
+      logger.debug(`Request ${requestId} includes ${images.length} image(s)`);
+    }
+    if (systemPrompt) {
+      logger.debug(`Request ${requestId} includes custom system prompt`);
+    }
 
     // Handle direct message mode (fire-and-forget)
     // Sends to VS Code chat window without @react-grab participant
     if (directMessage) {
+      logger.info(
+        `Starting direct message ${requestId} (background: ${background ?? true})`,
+      );
       // Store images for the screenshot endpoint to serve
       if (images && Array.isArray(images) && images.length > 0) {
         requestImages.set(requestId, images as ImageData[]);
+        logger.debug(`Stored ${images.length} images for request ${requestId}`);
       }
 
       return streamSSE(c, async (stream) => {
@@ -317,11 +355,13 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
             screenshotInfo,
           });
 
+          logger.debug(`Opening chat panel for request ${requestId}`);
           // Open chat panel (background flag controls focus behavior)
           await vscode.commands.executeCommand("workbench.action.chat.open", {
             query: enrichedQuery,
           });
 
+          logger.info(`Direct message ${requestId} started successfully`);
           // Fire and forget - emit status then done and close connection
           await stream.writeSSE({
             event: "status",
@@ -329,6 +369,7 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
           });
           await stream.writeSSE({ event: "done", data: "" });
         } catch (err: unknown) {
+          logger.error(`Direct message ${requestId} failed`, err);
           const msg = err instanceof Error ? err.message : "Unknown error";
           await stream.writeSSE({ event: "error", data: msg });
         }
@@ -339,11 +380,13 @@ IMPORTANT: Return ONLY the JSON array, no other text or explanations.`;
     // Store images for the participant to retrieve
     if (images && Array.isArray(images)) {
       requestImages.set(requestId, images as ImageData[]);
+      logger.debug(`Stored ${images.length} images for request ${requestId}`);
     }
 
     // Store custom system prompt for the participant to retrieve
     if (systemPrompt && typeof systemPrompt === "string") {
       requestSystemPrompts.set(requestId, systemPrompt);
+      logger.debug(`Stored custom system prompt for request ${requestId}`);
     }
 
     const formattedPrompt = `@react-grab ${prompt}
@@ -353,15 +396,11 @@ ${content}
 
 [request-id:${requestId}]`;
 
-    outputChannel.appendLine(
-      `[${new Date().toISOString()}] Queued Participant Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
-    );
+    logger.info(`Queued participant request ${requestId}`);
 
     return streamSSE(c, async (stream) => {
       const processRequest = async () => {
-        outputChannel.appendLine(
-          `[${new Date().toISOString()}] Processing Request: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
-        );
+        logger.info(`Processing participant request ${requestId}`);
         try {
           // Set up status event listener for tool usage and thinking
           const statusHandler = async (data: {
@@ -370,16 +409,19 @@ ${content}
             thinking?: string;
           }) => {
             if (data.tool) {
+              logger.debug(`Request ${requestId} using tool: ${data.tool}`);
               await stream.writeSSE({
                 event: "status",
                 data: `use tool ${data.tool}`,
               });
             } else if (data.thinking) {
+              logger.debug(`Request ${requestId} thinking`);
               await stream.writeSSE({ event: "status", data: data.thinking });
             }
           };
           eventEmitter.on(`${requestId}:status`, statusHandler);
 
+          logger.debug(`Opening chat panel for request ${requestId}`);
           await vscode.commands.executeCommand("workbench.action.chat.open", {
             query: formattedPrompt,
           });
@@ -391,6 +433,7 @@ ${content}
             };
             eventEmitter.once(requestId, handler);
             const timeout = setTimeout(() => {
+              logger.warn(`Request ${requestId} timed out after 60s`);
               eventEmitter.off(requestId, handler);
               resolve();
             }, 60000);
@@ -400,18 +443,13 @@ ${content}
           eventEmitter.off(`${requestId}:status`, statusHandler);
           requestImages.delete(requestId);
           requestSystemPrompts.delete(requestId);
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Done: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}`,
-          );
+          logger.info(`Request ${requestId} completed successfully`);
 
           await stream.writeSSE({ event: "done", data: "" });
         } catch (err: any) {
-          console.error("Error sending request to Copilot:", err);
+          logger.error(`Request ${requestId} failed`, err);
           const msg = err.message || "Unknown error";
           await stream.writeSSE({ event: "error", data: msg });
-          outputChannel.appendLine(
-            `[${new Date().toISOString()}] Error: ${msg}`,
-          );
         }
       };
 
@@ -425,18 +463,20 @@ ${content}
   });
 
   try {
+    logger.info(`Starting HTTP server on port ${port}`);
     const server = serve(
       {
         fetch: app.fetch,
         port,
       },
       (info) => {
-        console.log(`React Grab Copilot server listening on port ${info.port}`);
+        logger.info(`HTTP server started successfully on port ${info.port}`);
         statusBarItem.tooltip = `Listening on port ${info.port}`;
       },
     );
     return server;
   } catch (e: any) {
+    logger.error(`Failed to start HTTP server on port ${port}`, e);
     vscode.window.showErrorMessage(
       `Failed to start React Grab Copilot server: ${e.message}`,
     );
