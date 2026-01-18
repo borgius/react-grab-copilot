@@ -118,6 +118,32 @@ event: done
 data:
 ```
 
+**GET** `http://localhost:6567/health`
+
+Health check endpoint that also returns information about the VS Code workspace and detected app ports.
+
+Response:
+```json
+{
+  "status": "ok",
+  "serverPort": 6567,
+  "workspaceName": "my-project",
+  "workspacePaths": ["/path/to/my-project"],
+  "appPort": 5173,
+  "detectedPorts": [
+    {
+      "port": 5173,
+      "source": "config",
+      "confidence": "high",
+      "name": "Vite",
+      "configFile": "vite.config.ts"
+    }
+  ]
+}
+```
+
+The `appPort` field contains the primary detected dev server port, while `detectedPorts` contains all ports found from config files (vite.config.ts, webpack.config.js, etc.) and running processes.
+
 **GET** `http://localhost:6567/models`
 
 Returns available Copilot models and their capabilities.

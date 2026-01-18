@@ -7,6 +7,12 @@ import { streamSSE } from "hono/streaming";
 import * as vscode from "vscode";
 import type { Logger } from "../participant/logger";
 import { buildEnrichedQuery } from "../participant/queryBuilder";
+import {
+  detectAppPorts,
+  getWorkspaceName,
+  getWorkspacePaths,
+  type DetectedAppPort,
+} from "./appPortDetector";
 
 export interface ImageData {
   type: string;
@@ -55,10 +61,49 @@ export function startServer(
   const app = new Hono();
   app.use("/*", cors());
 
-  // Health check endpoint
-  app.get("/health", (c) => {
+  // Cache for detected app ports (refresh every 30 seconds)
+  let cachedAppPorts: {
+    ports: DetectedAppPort[];
+    primaryPort: number | null;
+    timestamp: number;
+  } | null = null;
+  const APP_PORT_CACHE_TTL = 30000; // 30 seconds
+
+  async function getAppPortInfo() {
+    const now = Date.now();
+    if (cachedAppPorts && now - cachedAppPorts.timestamp < APP_PORT_CACHE_TTL) {
+      return cachedAppPorts;
+    }
+    const result = await detectAppPorts();
+    cachedAppPorts = { ...result, timestamp: now };
+    return cachedAppPorts;
+  }
+
+  // Health check endpoint with app port detection
+  app.get("/health", async (c) => {
     logger.debug("Health check requested");
-    return c.json({ status: "ok" });
+    try {
+      const appPortInfo = await getAppPortInfo();
+      const workspaceName = getWorkspaceName();
+      const workspacePaths = getWorkspacePaths();
+
+      return c.json({
+        status: "ok",
+        serverPort: port,
+        workspaceName,
+        workspacePaths,
+        appPort: appPortInfo.primaryPort,
+        detectedPorts: appPortInfo.ports,
+      });
+    } catch (err) {
+      logger.error("Health check error", err);
+      return c.json({
+        status: "ok",
+        serverPort: port,
+        appPort: null,
+        detectedPorts: [],
+      });
+    }
   });
 
   // Screenshot endpoint - get screenshots by requestId
