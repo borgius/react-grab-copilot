@@ -2,8 +2,8 @@
   "name": "react-grab-copilot",
   "displayName": "React Grab Copilot",
   "description": "VS Code extension to expose Copilot as an agent server",
-  "version": "0.0.2",
-  "publisher": "borgius",
+  "version": "0.0.3",
+  "publisher": "vsborg",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -104,6 +104,8 @@
     "vscode:prepublish": "pnpm run build",
     "build": "vite build",
     "dev": "vite build --watch",
+    "pack": "pnpm run build && pnpm exec vsce package --no-dependencies",
+    "publish": "pnpm run pack && pnpm exec vsce publish --no-dependencies",
     "compile": "tsc -p ./",
     "lint": "biome lint .",
     "format": "biome format --write .",
@@ -113,7 +115,6 @@
     "version:minor": "npm version minor && pnpm exec vsce package",
     "version:major": "npm version major && pnpm exec vsce package",
     "package": "pnpm exec vsce package",
-    "publish": "pnpm exec vsce publish",
     "release:patch": "npm version patch && pnpm exec vsce publish",
     "release:minor": "npm version minor && pnpm exec vsce publish",
     "release:major": "npm version major && pnpm exec vsce publish"
